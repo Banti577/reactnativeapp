@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "424688868602",
+    "project_id": "filmspot-c164d",
+    "storage_bucket": "filmspot-c164d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:424688868602:android:6277fff2959de5da38bd43",
+        "android_client_info": {
+          "package_name": "com.movieapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB1cTns6l33Q8OmmiyTgJAWpSoSbnE9dSc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
