@@ -18,7 +18,7 @@ import messaging from '@react-native-firebase/messaging';
 
 import { Voice } from '@twilio/voice-react-native-sdk';
 
-const API_URL = 'http://192.168.4.200:3000';
+const API_URL = 'http://10.49.211.1:3000';
 
 const voice = new Voice();
 
