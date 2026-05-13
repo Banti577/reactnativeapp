@@ -6,6 +6,7 @@ import { createNativeStackNavigator }
 import HomeScreen from '../../HomeScreen';
 import SearchPage from '../screens/SearchPage/SearchPage';
 import VoiceScreen from '../screens/VoiceScreen/VoiceScreen'
+import ChatScreen  from '../screens/ChatScreen/ChatScreen'
 
 
 const Stack = createNativeStackNavigator();
@@ -21,13 +22,13 @@ function MainNavigator() {
 
             <Stack.Screen
                 name="Home"
-                component={VoiceScreen}
+                component={ChatScreen}
             />
 
 
             <Stack.Screen
                 name="VoiceScreen"
-                component={VoiceScreen}
+                component={ChatScreen}
             />
 
 

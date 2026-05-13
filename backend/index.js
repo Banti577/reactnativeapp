@@ -1,202 +1,385 @@
-
-
 require('dotenv').config();
 
-const express = require('express');
 const cors = require('cors');
-const cookieParser = require('cookie-parser');
-const twilioSDK = require('twilio');
+const express = require('express');
+const twilio = require('twilio');
 
 const app = express();
-
-const { AccessToken } = twilioSDK.jwt;
-const { VoiceGrant } = AccessToken;
-
-// ── Env vars ──────────────────────────────────────────────────
-const accountSid = process.env.TWILIO_ACCOUNT_SID;
-const apiKey = process.env.TWILIO_API_KEY;
-const apiSecret = process.env.TWILIO_API_SECRET;
-const twimlAppSid = process.env.TWIML_APP_SID;
-const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER;
-const pushCredentialSid = process.env.PUSH_CREDENTIAL_SID;  // FCM credential
 const PORT = process.env.PORT || 3000;
 
-// ── Middleware ────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// ENV
+// ─────────────────────────────────────────────
+const accountSid =
+  process.env.TWILIO_ACCOUNT_SID;
+
+const authToken =
+  process.env.TWILIO_AUTH_TOKEN;
+
+const apiKey =
+  process.env.TWILIO_API_KEY;
+
+const apiSecret =
+  process.env.TWILIO_API_SECRET;
+
+const conversationsServiceSid =
+  process.env
+    .TWILIO_CONVERSATIONS_SERVICE_SID;
+
+    console.log(
+   'SERVICE SID:',
+   conversationsServiceSid
+);
+
+// ─────────────────────────────────────────────
+// TWILIO
+// ─────────────────────────────────────────────
+const client = twilio(
+  accountSid,
+  authToken
+);
+
+const { AccessToken } = twilio.jwt;
+
+const { ChatGrant } = AccessToken;
+
+// ─────────────────────────────────────────────
+// MIDDLEWARE
+// ─────────────────────────────────────────────
 app.use(cors());
+
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
 
-// ── Helper: check all required env vars ───────────────────────
-function checkEnv(required) {
-    return required.filter(([, v]) => !v).map(([k]) => k);
-}
+// ─────────────────────────────────────────────
+// HEALTH
+// ─────────────────────────────────────────────
+app.get('/health', (req, res) => {
 
-// ─────────────────────────────────────────────────────────────
-// GET /voice/token?identity=alice
-//
-// React Native app yahan se Twilio Access Token leta hai.
-// Is token se:
-//   1. voice.register(token, { fcmToken }) — push notifications ke liye
-//   2. voice.connect(token, { params })    — outgoing call ke liye
-// ─────────────────────────────────────────────────────────────
+  return res.json({
+    status: 'ok',
 
+    env: {
+      accountSid:
+        accountSid ? 'set' : 'missing',
 
+      authToken:
+        authToken ? 'set' : 'missing',
 
+      apiKey:
+        apiKey ? 'set' : 'missing',
 
+      apiSecret:
+        apiSecret ? 'set' : 'missing',
+
+      conversationsServiceSid:
+        conversationsServiceSid
+          ? 'set'
+          : 'missing',
+    },
+  });
+});
+
+// ─────────────────────────────────────────────
+// TOKEN
+// ─────────────────────────────────────────────
 app.get('/voice/token', (req, res) => {
-    const identity = req.query.identity?.trim();
+
+  try {
+
+    const identity =
+      req.query.identity?.trim();
 
     if (!identity) {
-        return res.status(400).json({ error: 'identity is required' });
+
+      return res.status(400).json({
+        error: 'identity required',
+      });
     }
 
-    // Validate identity — sirf alphanumeric + underscore/hyphen allow karo
-    if (!/^[a-zA-Z0-9_\-\.]+$/.test(identity)) {
-        return res.status(400).json({ error: 'Invalid identity. Use only letters, numbers, underscore, hyphen.' });
-    }
+    const token = new AccessToken(
+      accountSid,
+      apiKey,
+      apiSecret,
+      {
+        identity,
+        ttl: 3600,
+      }
+    );
 
-    const missing = checkEnv([
-        ['TWILIO_ACCOUNT_SID', accountSid],
-        ['TWILIO_API_KEY', apiKey],
-        ['TWILIO_API_SECRET', apiSecret],
-        ['TWIML_APP_SID', twimlAppSid],
-    ]);
+    token.addGrant(
+      new ChatGrant({
+        serviceSid:
+          conversationsServiceSid,
+      })
+    );
 
-    if (missing.length > 0) {
-        console.error('❌ Missing env vars:', missing);
-        return res.status(500).json({ error: `Missing config: ${missing.join(', ')}` });
-    }
+    return res.json({
+      identity,
+      token: token.toJwt(),
+    });
+
+  } catch (err) {
+
+    console.log(
+      'TOKEN ERROR'
+    );
+
+    console.log(err);
+
+    return res.status(500).json({
+      error: err.message,
+    });
+  }
+});
+
+// ─────────────────────────────────────────────
+// LIST CONVERSATIONS
+// ─────────────────────────────────────────────
+app.get('/conversations', async (req, res) => {
+
+  try {
+
+    const conversations =
+      await client.conversations.v1
+        .conversations
+        .list({
+          limit: 50,
+        });
+
+    return res.json({
+      conversations:
+        conversations.map(c => ({
+          sid: c.sid,
+          uniqueName:
+            c.uniqueName,
+          friendlyName:
+            c.friendlyName,
+        })),
+    });
+
+  } catch (err) {
+
+    console.log(err);
+
+    return res.status(500).json({
+      error: err.message,
+    });
+  }
+});
+
+
+
+app.delete('/reset', async (req, res) => {
 
     try {
-        console.log('✅ Creating token for identity:', identity);
 
-        const token = new AccessToken(accountSid, apiKey, apiSecret, {
-            identity,
-            ttl: 3600, // 1 hour valid
+        console.log('this si reset')
+
+        const conversations =
+            await client.conversations.v1
+                .conversations
+                .list();
+
+        for (const c of conversations) {
+
+            console.log(
+                'DELETING:',
+                c.sid
+            );
+
+            await client.conversations.v1
+                .conversations(c.sid)
+                .remove();
+        }
+
+        res.json({
+            success: true,
         });
-
-        // VoiceGrant — incoming + outgoing allow
-        const voiceGrant = new VoiceGrant({
-            outgoingApplicationSid: twimlAppSid,
-            incomingAllow: true,
-            // ✅ KEY: Android FCM push ke liye yeh zaroori hai
-            // Twilio Console → Voice → Push Credentials mein FCM Server Key add karo
-            // wahan se PUSH_CREDENTIAL_SID milega
-            ...(pushCredentialSid && { androidPushCredentialSid: pushCredentialSid }),
-        });
-
-        token.addGrant(voiceGrant);
-
-        const jwt = token.toJwt();
-        console.log('✅ Token generated for:', identity);
-
-        return res.json({ token: jwt, identity });
 
     } catch (err) {
-        console.error('❌ Token generation error:', err.message);
-        return res.status(500).json({ error: 'Token generation failed: ' + err.message });
+
+        console.log(err);
+
+        res.status(500).json({
+            error: err.message,
+        });
     }
 });
 
-// ─────────────────────────────────────────────────────────────
-// POST /voice — TwiML webhook
-//
-// Twilio yahan aata hai jab koi call aati/jati hai.
-// TwiML App ke "Voice Request URL" mein yeh URL set karo:
-//   https://your-server.com/voice
-//
-// Agar local development kar rahe ho, ngrok use karo:
-//   ngrok http 3000
-//   → https://xxxx.ngrok.io/voice
-// ─────────────────────────────────────────────────────────────
-app.post('/voice', (req, res) => {
-    const to = req.body.To || req.query.To;
-    const from = req.body.From || req.query.From || 'anonymous';
+// ─────────────────────────────────────────────
+// CREATE / FETCH CONVERSATION
+// ─────────────────────────────────────────────
+app.post('/conversation', async (req, res) => {
 
-    console.log('📞 TwiML request — To:', to, '| From:', from);
+  try {
 
-    const twiml = new twilioSDK.twiml.VoiceResponse();
+    const { user1, user2 } = req.body;
 
-    if (!to) {
-        twiml.say('No destination provided.');
-        console.log('⚠️ No To field — saying error message');
+    if (!user1 || !user2) {
 
-    } else if (/^\+?[1-9]\d{7,14}$/.test(to)) {
-        // ── PSTN phone number call (e.g. +919876543210) ──────────
-        console.log('📱 PSTN call to:', to);
-
-        const callerId = twilioPhoneNumber || from;
-        const dial = twiml.dial({
-            callerId,
-            answerOnBridge: true,  // caller "connected" tab ho jab receiver pick kare
-        });
-        dial.number(to);
-
-    } else {
-        // ── App-to-App (client identity) call ────────────────────
-        // "client:bob" ya sirf "bob" dono handle karte hain
-        const clientName = to.startsWith('client:') ? to.replace('client:', '') : to;
-        console.log('📲 Client call to:', clientName);
-
-        const dial = twiml.dial({
-            answerOnBridge: true,  // ✅ receiver ke pickup karne tak caller "ringing" mein rahe
-            callerId: from,
-        });
-        dial.client(clientName);
-
-        console.log('✅ Dialing client:', clientName);
+      return res.status(400).json({
+        error:
+          'user1 and user2 required',
+      });
     }
 
-    console.log('📄 TwiML:\n', twiml.toString());
+    const uniqueName =
+      [user1, user2]
+        .sort()
+        .join('__');
 
-    res.type('text/xml');
-    return res.send(twiml.toString());
-});
+    console.log(
+      'UNIQUE:',
+      uniqueName
+    );
 
-// ─────────────────────────────────────────────────────────────
-// GET /voice/status — Call status callback (optional)
-// Twilio Console → TwiML App → Status Callback URL mein set karo
-// ─────────────────────────────────────────────────────────────
-app.post('/voice/status', (req, res) => {
-    const { CallSid, CallStatus, To, From, Duration } = req.body;
-    console.log(`📊 Call Status — SID: ${CallSid} | Status: ${CallStatus} | To: ${To} | From: ${From} | Duration: ${Duration}s`);
-    res.sendStatus(204);
-});
+    let conversation;
 
-// ─────────────────────────────────────────────────────────────
-// GET /health — Server health check
-// ─────────────────────────────────────────────────────────────
-app.get('/health', (req, res) => {
-    res.json({
-        status: 'ok',
-        timestamp: new Date().toISOString(),
-        env: {
-            accountSid: accountSid ? '✅ set' : '❌ missing',
-            apiKey: apiKey ? '✅ set' : '❌ missing',
-            apiSecret: apiSecret ? '✅ set' : '❌ missing',
-            twimlAppSid: twimlAppSid ? '✅ set' : '❌ missing',
-            twilioPhoneNumber: twilioPhoneNumber ? '✅ set' : '⚠️ not set (PSTN calls may fail)',
-            pushCredentialSid: pushCredentialSid ? '✅ set' : '⚠️ not set (background push disabled)',
-        },
+    // ─────────────────────────────────────────
+    // FETCH EXISTING
+    // ─────────────────────────────────────────
+    try {
+
+      conversation =
+        await client.conversations.v1
+          .conversations(uniqueName)
+          .fetch();
+
+      console.log(
+        'EXISTING:',
+        conversation.sid
+      );
+
+    } catch {
+
+      // ───────────────────────────────────────
+      // CREATE NEW
+      // ───────────────────────────────────────
+      console.log(
+        'CREATING NEW CONVERSATION'
+      );
+
+      conversation =
+        await client.conversations.v1
+          .conversations
+          .create({
+            uniqueName,
+
+            friendlyName:
+              `Chat ${user1} ${user2}`,
+          });
+
+      console.log(
+        'CREATED:',
+        conversation.sid
+      );
+
+      // ───────────────────────────────────────
+      // ADD USER 1
+      // ───────────────────────────────────────
+      await client.conversations.v1
+        .conversations(
+          conversation.sid
+        )
+        .participants
+        .create({
+          identity: user1,
+        });
+
+      console.log(
+        'ADDED:',
+        user1
+      );
+
+      // ───────────────────────────────────────
+      // ADD USER 2
+      // ───────────────────────────────────────
+      await client.conversations.v1
+        .conversations(
+          conversation.sid
+        )
+        .participants
+        .create({
+          identity: user2,
+        });
+
+      console.log(
+        'ADDED:',
+        user2
+      );
+    }
+
+    // ─────────────────────────────────────────
+    // DEBUG PARTICIPANTS
+    // ─────────────────────────────────────────
+    const participants =
+      await client.conversations.v1
+        .conversations(
+          conversation.sid
+        )
+        .participants
+        .list();
+
+    console.log(
+      'PARTICIPANTS:',
+      participants.map(
+        p => p.identity
+      )
+    );
+
+    return res.json({
+      conversationSid:
+        conversation.sid,
+
+      uniqueName:
+        conversation.uniqueName,
     });
+
+  } catch (err) {
+
+    console.log(
+      '========== ERROR =========='
+    );
+
+    console.log(
+      'MESSAGE:',
+      err.message
+    );
+
+    console.log(
+      'CODE:',
+      err.code
+    );
+
+    console.log(
+      'STATUS:',
+      err.status
+    );
+
+    console.log(
+      'MORE INFO:',
+      err.moreInfo
+    );
+
+    console.log(err);
+
+    return res.status(500).json({
+      error: err.message,
+    });
+  }
 });
 
-// ─────────────────────────────────────────────────────────────
-// Start server
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// START SERVER
+// ─────────────────────────────────────────────
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n🚀 Server running on http://0.0.0.0:${PORT}`);
-    console.log(`🔍 Health:  http://0.0.0.0:${PORT}/health`);
-    console.log(`🎙️  Token:   http://0.0.0.0:${PORT}/voice/token?identity=alice`);
-    console.log(`📞 TwiML:   http://0.0.0.0:${PORT}/voice\n`);
 
-    // Warn about missing optional vars
-    if (!pushCredentialSid) {
-        console.warn('⚠️  PUSH_CREDENTIAL_SID not set — background incoming calls will NOT work');
-        console.warn('→ Twilio Console → Voice → Push Credentials → Create Android credential with FCM Server Key');
-    }
-    if (!twilioPhoneNumber) {
-        console.warn('⚠️  TWILIO_PHONE_NUMBER not set — PSTN outgoing calls may fail');
-    }
+  console.log(
+    `Server running on port ${PORT}`
+  );
+
+  console.log(
+    `Health:
+http://0.0.0.0:${PORT}/health`
+  );
 });
