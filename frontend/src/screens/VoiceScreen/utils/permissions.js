@@ -16,17 +16,25 @@ export const requestVoicePermissions = async () => {
     }
 
     const result = await PermissionsAndroid.requestMultiple(permissions);
+
+    console.log('PERMISSION RESULT:', result);
+
     const micGranted =
       result[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] === 'granted';
 
-    if (!micGranted) {
-      Alert.alert('Permission Denied');
+    const notificationGranted =
+      result[PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS] === 'granted';
+
+    if (!micGranted || !notificationGranted) {
+      Alert.alert('Required permissions denied');
+
       return false;
     }
 
     return true;
   } catch (err) {
     console.log(err);
+
     return false;
   }
 };

@@ -39,17 +39,24 @@ export const useTwilioVoice = () => {
       console.log('TWILIO REGISTRATION FAILED', e);
     });
 
-    voice.on('callInvite', (callInvite) => {
-      console.log('INCOMING CALL EVENT');
+voice.on('incomingCall', (callInvite) => {
+  console.log('INCOMING CALL EVENT');
 
-      const from = callInvite.from || 'Unknown';
+  const from = callInvite.from || 'Unknown';
 
-      Alert.alert('Incoming Call', `From: ${from}`);
-      log('Incoming call from: ' + from);
-      setCallerName(from);
-      callInviteRef.current = callInvite;
-      setStatus('incoming');
-    });
+  Alert.alert('Incoming Call', `From: ${from}`);
+
+  log('Incoming call from: ' + from);
+
+  setCallerName(from);
+
+  callInviteRef.current = callInvite;
+
+  setStatus('incoming');
+});
+
+
+
 
     voice.on('cancelledCallInvite', () => {
       console.log('CALL CANCELLED');
@@ -105,14 +112,18 @@ export const useTwilioVoice = () => {
       log('Twilio token received');
 
       // await voice.register(twilioToken);
-      await voice.register(twilioToken, fcmToken);
+      //const final  = await voice.register(twilioToken, fcmToken);
+
+      console.log('this is final', final)
       //       await voice.register(twilioToken, {
       //   fcmToken,
       // });
 
-      // await voice.register(twilioToken, {
-      //   fcmToken,
-      // });
+     const final  =  await voice.register(twilioToken, {
+        fcmToken,
+      });
+
+        console.log('this is final', final)
 
       console.log('TWILIO REGISTERED');
       setStatus('registered');
@@ -153,6 +164,8 @@ export const useTwilioVoice = () => {
   const makeCall = async () => {
     const receiver = callTo.trim();
 
+    console.log('this is receiver', receiver)
+
     if (!receiver) {
       Alert.alert('Error', 'Enter receiver identity');
       return;
@@ -162,13 +175,19 @@ export const useTwilioVoice = () => {
       setStatus('calling');
       log('Calling ' + receiver);
 
-      console.log('console se pahle')
+      console.log('console se pahle', tokenRef.current)
 
       const call = await voice.connect(tokenRef.current, {
         params: {
           To: receiver,
         },
       });
+
+//       const call = await voice.connect(tokenRef.current, {
+//   params: {
+//     to: receiver,
+//   },
+// });
 
       console.log('console me yah impotant call', call)
 
