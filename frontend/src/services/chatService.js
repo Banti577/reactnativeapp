@@ -1,6 +1,6 @@
 import { Client } from '@twilio/conversations';
 
-const BACKEND_URL = 'http://192.168.4.200:3000';
+const BACKEND_URL = 'http://192.168.0.99:3000';
 
 // Timeout constants — change in one place
 const INIT_TIMEOUT_MS  = 15_000;
@@ -12,7 +12,6 @@ const SYNC_MAX_RETRIES = 10;
 const MAX_FILE_SIZE_BYTES = 150 * 1024 * 1024;
 
 let twilioClient = null;
-
 
 /**
  * Returns a promise that rejects after `ms` milliseconds.
@@ -88,6 +87,8 @@ export async function initChat(identity) {
 
         console.log('CHAT READY:', identity);
 
+        console.log('CHAT READY:', identity);
+        
         return twilioClient;
 
     } catch (err) {
@@ -142,7 +143,7 @@ export async function getConversation(user1, user2) {
                 await new Promise(r => setTimeout(r, SYNC_RETRY_DELAY));
                 try {
                     const c = await twilioClient.getConversationBySid(conversationSid);
-                    console.log(`✅ SYNCED via poll (attempt ${i + 1}):`, c.sid);
+                    console.log(`SYNCED via poll (attempt ${i + 1}):`, c.sid);
                     return c;
                 } catch {
                     console.log(`POLL ${i + 1}/${SYNC_MAX_RETRIES} — not yet synced`);
@@ -157,9 +158,9 @@ export async function getConversation(user1, user2) {
     return convo;
 }
 
-// ─────────────────────────────────────────────
+
 // SEND TEXT MESSAGE
-// ─────────────────────────────────────────────
+
 export async function sendMessage(conversation, text) {
 
     if (!conversation) throw new Error('Conversation missing');
@@ -216,7 +217,7 @@ export async function sendFile(conversation, file, onProgress) {
             : undefined,
     });
 
-    console.log('✅ FILE SENT, index:', messageIndex);
+    console.log('FILE SENT, index:', messageIndex);
 
     return messageIndex;
 }
@@ -271,5 +272,38 @@ export async function shutdownChat() {
         console.log('SHUTDOWN ERROR:', err.message);
     } finally {
         twilioClient = null;
+    }
+}
+
+
+// ─────────────────────────────────────────────
+// GET ALL CONVERSATIONS
+// ─────────────────────────────────────────────
+export async function getAllConversations() {
+
+    if (!twilioClient) {
+        throw new Error('Call initChat() first');
+    }
+
+    try {
+
+        const paginator =
+            await twilioClient.getSubscribedConversations();
+
+        console.log(
+            'ALL CONVERSATIONS:',
+            paginator.items.length
+        );
+
+        return paginator.items;
+
+    } catch (err) {
+
+        console.log(
+            'GET CONVERSATIONS ERROR:',
+            err
+        );
+
+        throw err;
     }
 }

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
@@ -21,12 +20,10 @@ import { launchImageLibrary } from 'react-native-image-picker';
 import { pick } from '@react-native-documents/picker';
 
 import {
-  initChat,
   getConversation,
   sendMessage,
   sendFile,
   deleteMessage,
-  shutdownChat,
 } from '../../services/chatService';
 
 // ─────────────────────────────────────────────
@@ -34,7 +31,6 @@ import {
 // ─────────────────────────────────────────────
 function formatTime(date) {
   if (!date) return '';
-
   return new Date(date).toLocaleTimeString([], {
     hour: '2-digit',
     minute: '2-digit',
@@ -44,92 +40,74 @@ function formatTime(date) {
 // ─────────────────────────────────────────────
 // COMPONENT
 // ─────────────────────────────────────────────
-const ChatScreen = () => {
-  // ── Login state ──
-  const [currentUser, setCurrentUser] = useState('');
-  const [targetUser, setTargetUser] = useState('');
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  // ── Chat state ──
+// Accepts props from navigation (route.params) set by ConversationsListScreen
+const ChatScreen = ({ route, navigation }) => {
+  const { currentUser, targetUser } = route?.params || {};
+
   const conversationRef = useRef(null);
 
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);   // start as loading
   const [error, setError] = useState(null);
-
   const [uploadProgress, setUploadProgress] = useState(null);
 
   const flatListRef = useRef(null);
 
+  // ─────────────────────────────────────────
+  // AUTO-CONNECT ON MOUNT
+  // ─────────────────────────────────────────
   useEffect(() => {
+    if (currentUser && targetUser) {
+      connect();
+    } else {
+      setError('Missing user info. Please go back and try again.');
+      setLoading(false);
+    }
+
     return () => {
-      shutdownChat();
+      // Clean up listeners but don't shut down the client
+      // (ConversationsListScreen owns the client lifecycle)
+      if (conversationRef.current) {
+        conversationRef.current.removeAllListeners('messageAdded');
+        conversationRef.current.removeAllListeners('messageRemoved');
+      }
     };
   }, []);
 
-  // ─────────────────────────────────────────
-  // LOGIN
-  // ─────────────────────────────────────────
-  const handleLogin = async () => {
-    const me = currentUser.trim();
-    const other = targetUser.trim();
-
-    if (!me || !other) {
-      return setError('Dono fields fill karo');
-    }
-
-    if (me === other) {
-      return setError('set diffrent username');
-    }
-
-    setError(null);
+  const connect = async () => {
     setLoading(true);
+    setError(null);
 
     try {
-      await initChat(me);
-
-      const convo = await getConversation(me, other);
-
+      const convo = await getConversation(currentUser, targetUser);
       conversationRef.current = convo;
 
       // Load history
       const page = await convo.getMessages(50);
-
-      const formattedMessages = await Promise.all(
-        page.items.map(msgToState)
-      );
-
+      const formattedMessages = await Promise.all(page.items.map(msgToState));
       setMessages(formattedMessages);
 
-      // Realtime listener
+      // Real-time listeners
       convo.removeAllListeners('messageAdded');
+      convo.removeAllListeners('messageRemoved');
 
       convo.on('messageAdded', async m => {
         const formatted = await msgToState(m);
-
         setMessages(prev => {
-          if (prev.some(x => x.id === formatted.id)) {
-            return prev;
-          }
-
+          if (prev.some(x => x.id === formatted.id)) return prev;
           return [...prev, formatted];
         });
       });
 
       convo.on('messageRemoved', m => {
-        setMessages(prev =>
-          prev.filter(x => x.id !== m.sid),
-        );
+        setMessages(prev => prev.filter(x => x.id !== m.sid));
       });
 
-      setIsLoggedIn(true);
-
     } catch (err) {
-      console.log('CHAT ERROR', err);
-
-      setError(err.message || 'Connection fail ho gayi');
-
+      console.log('CHAT CONNECT ERROR', err);
+      setError(err.message || 'Could not load conversation');
     } finally {
       setLoading(false);
     }
@@ -140,21 +118,15 @@ const ChatScreen = () => {
   // ─────────────────────────────────────────
   const onSend = async () => {
     const convo = conversationRef.current;
-
-    if (!text.trim() || !convo) {
-      return;
-    }
+    if (!text.trim() || !convo) return;
 
     const temp = text;
-
     setText('');
 
     try {
       await sendMessage(convo, temp);
-
     } catch (err) {
       console.log('SEND ERROR', err);
-
       setText(temp);
     }
   };
@@ -167,123 +139,61 @@ const ChatScreen = () => {
 
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options,
-          cancelButtonIndex: 2,
-        },
+        { options, cancelButtonIndex: 2 },
         index => {
-          if (index === 0) {
-            pickImage();
-          }
-
-          if (index === 1) {
-            pickDocument();
-          }
+          if (index === 0) pickImage();
+          if (index === 1) pickDocument();
         },
       );
-
     } else {
-
-      Alert.alert(
-        'File bhejo',
-        'Kya bhejoge?',
-        [
-          {
-            text: 'Image',
-            onPress: pickImage,
-          },
-          {
-            text: 'Document',
-            onPress: pickDocument,
-          },
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-        ],
-      );
+      Alert.alert('Attach', 'What do you want to send?', [
+        { text: 'Image', onPress: pickImage },
+        { text: 'Document', onPress: pickDocument },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
     }
   };
 
-  // ─────────────────────────────────────────
-  // PICK IMAGE
-  // ─────────────────────────────────────────
   const pickImage = async () => {
     try {
-      const result = await launchImageLibrary({
-        mediaType: 'mixed',
-        quality: 0.8,
-      });
-
-      if (result.didCancel || !result.assets?.[0]) {
-        return;
-      }
-
+      const result = await launchImageLibrary({ mediaType: 'mixed', quality: 0.8 });
+      if (result.didCancel || !result.assets?.[0]) return;
       const asset = result.assets[0];
-
       await uploadFile({
         uri: asset.uri,
         name: asset.fileName || `image_${Date.now()}.jpg`,
         type: asset.type || 'image/jpeg',
         size: asset.fileSize,
       });
-
     } catch (err) {
-      console.log('IMAGE PICK ERROR', err);
-
-      Alert.alert('Error', 'Image pick nahi ho payi');
+      Alert.alert('Error', 'Could not pick image');
     }
   };
 
-  // ─────────────────────────────────────────
-  // PICK DOCUMENT
-  // ─────────────────────────────────────────
   const pickDocument = async () => {
     try {
-      const [result] = await pick({
-        mode: 'open',
-      });
-
-      if (!result) {
-        return;
-      }
-
+      const [result] = await pick({ mode: 'open' });
+      if (!result) return;
       await uploadFile({
         uri: result.uri,
         name: result.name,
         type: result.type || 'application/octet-stream',
         size: result.size,
       });
-
     } catch (err) {
-      console.log('DOC PICK ERROR', err);
-
-      Alert.alert('Error', 'File pick nahi ho payi');
+      Alert.alert('Error', 'Could not pick file');
     }
   };
 
-  // ─────────────────────────────────────────
-  // UPLOAD FILE
-  // ─────────────────────────────────────────
   const uploadFile = async file => {
     const convo = conversationRef.current;
-
-    if (!convo) {
-      return;
-    }
+    if (!convo) return;
 
     setUploadProgress(0);
-
     try {
-      await sendFile(convo, file, percent => {
-        setUploadProgress(percent);
-      });
-
+      await sendFile(convo, file, percent => setUploadProgress(percent));
     } catch (err) {
-      console.log('UPLOAD ERROR', err);
-
       Alert.alert('Upload failed', err.message);
-
     } finally {
       setUploadProgress(null);
     }
@@ -294,54 +204,22 @@ const ChatScreen = () => {
   // ─────────────────────────────────────────
   const onLongPressMessage = item => {
     const convo = conversationRef.current;
+    if (!convo || item.author !== currentUser) return;
 
-    if (!convo) {
-      return;
-    }
-
-    if (item.author !== currentUser) {
-      return;
-    }
-
-    Alert.alert(
-      'Delete This Message?',
-      'Do you Delele this message',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
+    Alert.alert('Delete Message?', 'This will remove the message for everyone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteMessage(convo, item._raw);
+          } catch (err) {
+            Alert.alert('Error', 'Could not delete message');
+          }
         },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteMessage(convo, item._raw);
-
-            } catch (err) {
-              console.log('DELETE ERROR', err);
-
-              Alert.alert('Error', 'Delete nahi ho paya');
-            }
-          },
-        },
-      ],
-    );
-  };
-
-  // ─────────────────────────────────────────
-  // LOGOUT
-  // ─────────────────────────────────────────
-  const handleLogout = () => {
-    shutdownChat();
-
-    conversationRef.current = null;
-
-    setIsLoggedIn(false);
-    setMessages([]);
-    setCurrentUser('');
-    setTargetUser('');
-    setError(null);
+      },
+    ]);
   };
 
   // ─────────────────────────────────────────
@@ -355,24 +233,16 @@ const ChatScreen = () => {
       <TouchableOpacity
         activeOpacity={0.85}
         onLongPress={() => onLongPressMessage(item)}
-        style={[
-          styles.messageBox,
-          isMine && styles.myMessage,
-        ]}
+        style={[styles.messageBox, isMine && styles.myMessage]}
       >
-        <Text style={styles.author}>
-          {item.author}
-        </Text>
+        <Text style={styles.author}>{item.author}</Text>
 
         {hasMedia ? (
           <TouchableOpacity
             onPress={async () => {
               try {
                 const url = await item.mediaUrl;
-
-                if (url) {
-                  Linking.openURL(url);
-                }
+                if (url) Linking.openURL(url);
               } catch (e) {
                 console.log('OPEN FILE ERROR', e);
               }
@@ -380,187 +250,122 @@ const ChatScreen = () => {
           >
             {item.mediaType.startsWith('image/') ? (
               <Image
-                source={{
-                  uri: item.mediaUrl,
-                }}
+                source={{ uri: item.mediaUrl }}
                 style={styles.chatImage}
                 resizeMode="cover"
               />
             ) : (
               <View style={styles.fileRow}>
                 <Text style={styles.fileIcon}>📎</Text>
-
-                <Text style={styles.fileName}>
-                  {item.fileName || 'File'}
-                </Text>
+                <Text style={styles.fileName}>{item.fileName || 'File'}</Text>
               </View>
             )}
-
-            <Text style={styles.downloadText}>
-              Tap to download/open
-            </Text>
+            <Text style={styles.downloadText}>Tap to open</Text>
           </TouchableOpacity>
         ) : (
-          <Text style={styles.message}>
-            {item.body}
-          </Text>
+          <Text style={styles.message}>{item.body}</Text>
         )}
 
         {isMine && (
-          <Text style={styles.deleteHint}>
-            ꞉꞉ Hold to delete
-          </Text>
+          <Text style={styles.deleteHint}>꞉꞉ Hold to delete</Text>
         )}
 
-        <Text style={styles.time}>
-          {formatTime(item.ts)}
-        </Text>
+        <Text style={styles.time}>{formatTime(item.ts)}</Text>
       </TouchableOpacity>
     );
   };
 
   // ─────────────────────────────────────────
-  // LOGIN SCREEN
+  // LOADING / ERROR STATES
   // ─────────────────────────────────────────
-  if (!isLoggedIn) {
+  if (loading) {
     return (
-      <SafeAreaView style={styles.loginContainer}>
-        <Text style={styles.title}>
-          💬 Twilio Chat
-        </Text>
-
-        <Text style={styles.label}>
-          Your Username
-        </Text>
-
-        <TextInput
-          style={styles.loginInput}
-          placeholder="e.g. user1"
-          value={currentUser}
-          onChangeText={setCurrentUser}
-        />
-
-        <Text style={styles.label}>
-          Whom do you want to talk to?
-        </Text>
-
-        <TextInput
-          style={styles.loginInput}
-          placeholder="e.g. user2"
-          value={targetUser}
-          onChangeText={setTargetUser}
-        />
-
-        {!!error && (
-          <Text style={styles.errorText}>
-            {error}
-          </Text>
-        )}
-
-        {loading ? (
-          <ActivityIndicator
-            size="large"
-            color="#007AFF"
-            style={{ marginTop: 20 }}
-          />
-        ) : (
-          <TouchableOpacity
-            style={styles.loginButton}
-            onPress={handleLogin}
-          >
-            <Text style={styles.loginButtonText}>
-              Connect
-            </Text>
-          </TouchableOpacity>
-        )}
+      <SafeAreaView style={styles.centered}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.loadingText}>Opening chat…</Text>
       </SafeAreaView>
     );
   }
 
+  if (error) {
+    return (
+      <SafeAreaView style={styles.centered}>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryBtn} onPress={connect}>
+          <Text style={styles.retryText}>Retry</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  // ─────────────────────────────────────────
+  // CHAT UI
+  // ─────────────────────────────────────────
   return (
     <SafeAreaView style={styles.container}>
+      {/* HEADER */}
       <View style={styles.header}>
-        <Text style={styles.headerText}>
-          {currentUser} → {targetUser}
-        </Text>
-
-        <TouchableOpacity onPress={handleLogout}>
-          <Text style={styles.logoutText}>
-            Logout
-          </Text>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => navigation?.goBack()}
+        >
+          <Text style={styles.backIcon}>←</Text>
         </TouchableOpacity>
+
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerName}>{targetUser}</Text>
+          <Text style={styles.headerSub}>@{currentUser}</Text>
+        </View>
       </View>
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={
-          Platform.OS === 'ios'
-            ? 'padding'
-            : 'height'
-        }
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <FlatList
           ref={flatListRef}
           data={messages}
           keyExtractor={item => item.id}
           renderItem={renderItem}
-          contentContainerStyle={{
-            padding: 16,
-          }}
+          contentContainerStyle={{ padding: 16 }}
           onContentSizeChange={() =>
-            flatListRef.current?.scrollToEnd({
-              animated: true,
-            })
+            flatListRef.current?.scrollToEnd({ animated: true })
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyChat}>
+              <Text style={styles.emptyChatText}>
+                No messages yet. Say hello! 👋
+              </Text>
+            </View>
           }
         />
 
         {uploadProgress !== null && (
           <View style={styles.progressBar}>
-            <View
-              style={[
-                styles.progressFill,
-                {
-                  width: `${uploadProgress}%`,
-                },
-              ]}
-            />
-
-            <Text style={styles.progressText}>
-              Uploading... {uploadProgress}%
-            </Text>
+            <View style={[styles.progressFill, { width: `${uploadProgress}%` }]} />
+            <Text style={styles.progressText}>Uploading… {uploadProgress}%</Text>
           </View>
         )}
 
         <View style={styles.inputRow}>
-          <TouchableOpacity
-            style={styles.attachBtn}
-            onPress={onAttach}
-          >
-            <Text style={styles.attachIcon}>
-              📎
-            </Text>
+          <TouchableOpacity style={styles.attachBtn} onPress={onAttach}>
+            <Text style={styles.attachIcon}>📎</Text>
           </TouchableOpacity>
 
           <TextInput
             style={styles.input}
             value={text}
             onChangeText={setText}
-            placeholder="Message..."
+            placeholder="Message…"
             multiline
           />
 
           <TouchableOpacity
-            style={[
-              styles.sendBtn,
-              !text.trim() &&
-              styles.sendBtnDisabled,
-            ]}
+            style={[styles.sendBtn, !text.trim() && styles.sendBtnDisabled]}
             onPress={onSend}
             disabled={!text.trim()}
           >
-            <Text style={styles.sendBtnText}>
-              Send
-            </Text>
+            <Text style={styles.sendBtnText}>Send</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -573,7 +378,6 @@ const ChatScreen = () => {
 // ─────────────────────────────────────────────
 async function msgToState(m) {
   const media = m.attachedMedia?.[0];
-
   let mediaUrl = null;
 
   try {
@@ -589,15 +393,10 @@ async function msgToState(m) {
     body: m.body,
     author: m.author,
     ts: m.dateCreated,
-
     hasMedia: !!media,
-
     fileName: media?.filename || null,
-
     mediaType: media?.contentType || '',
-
     mediaUrl,
-
     _raw: m,
   };
 }
@@ -613,80 +412,79 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
 
-  loginContainer: {
+  centered: {
     flex: 1,
-    justifyContent: 'center',
-    padding: 28,
-    backgroundColor: '#fff',
-  },
-
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    marginBottom: 32,
-    textAlign: 'center',
-    color: '#111',
-  },
-
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#555',
-    marginBottom: 6,
-    marginTop: 12,
-  },
-
-  loginInput: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    backgroundColor: '#f9f9f9',
-  },
-
-  loginButton: {
-    marginTop: 28,
-    backgroundColor: '#007AFF',
-    borderRadius: 10,
-    paddingVertical: 14,
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    padding: 24,
   },
 
-  loginButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#666',
   },
 
   errorText: {
-    color: 'red',
-    marginTop: 12,
+    color: '#E53935',
+    fontSize: 15,
     textAlign: 'center',
+    marginBottom: 20,
   },
 
+  retryBtn: {
+    backgroundColor: '#007AFF',
+    borderRadius: 10,
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+  },
+
+  retryText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+
+  // ── Header ──
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
+    backgroundColor: '#fff',
   },
 
-  headerText: {
-    fontSize: 15,
+  backBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginRight: 8,
+  },
+
+  backIcon: {
+    fontSize: 22,
+    color: '#007AFF',
+  },
+
+  headerCenter: {
+    flex: 1,
+  },
+
+  headerName: {
+    fontSize: 16,
     fontWeight: '700',
     color: '#111',
   },
 
-  logoutText: {
-    color: '#FF3B30',
-    fontWeight: '600',
+  headerSub: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 1,
   },
 
+  // ── Messages ──
   messageBox: {
     marginBottom: 12,
     padding: 10,
@@ -742,6 +540,18 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
   },
 
+  emptyChat: {
+    flex: 1,
+    alignItems: 'center',
+    paddingTop: 80,
+  },
+
+  emptyChatText: {
+    color: '#aaa',
+    fontSize: 15,
+  },
+
+  // ── Input ──
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
