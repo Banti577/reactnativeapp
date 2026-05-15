@@ -397,7 +397,7 @@ const ConversationsListScreen = ({ navigation }) => {
       {/* HEADER */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.headerTitle}>WhatsApp</Text>
+          <Text style={styles.headerTitle}>Twilio</Text>
           <Text style={styles.headerSub}>@{currentUser}</Text>
         </View>
         <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>

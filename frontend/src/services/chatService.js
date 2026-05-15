@@ -52,6 +52,7 @@ export async function initChat(identity) {
         }
 
         const { token } = await res.json();
+console.log(token, "tttttttttttttttt");
 
         // ─────────────────────────
         // CREATE CLIENT

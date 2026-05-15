@@ -86,8 +86,8 @@ app.get('/conversations', async (req, res) => {
 
     return res.json({
       conversations: conversations.map(c => ({
-        sid:          c.sid,
-        uniqueName:   c.uniqueName,
+        sid: c.sid,
+        uniqueName: c.uniqueName,
         friendlyName: c.friendlyName,
       })),
     });
@@ -195,7 +195,7 @@ app.post('/conversation', async (req, res) => {
 
     return res.json({
       conversationSid: conversation.sid,
-      uniqueName:      conversation.uniqueName,
+      uniqueName: conversation.uniqueName,
     });
 
   } catch (err) {

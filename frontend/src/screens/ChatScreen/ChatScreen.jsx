@@ -37,26 +37,78 @@ function formatTime(date) {
   });
 }
 
+async function msgToState(m) {
+  const media = m.attachedMedia?.[0];
+  let mediaUrl = null;
+
+  try {
+    if (media?.getContentTemporaryUrl) {
+      mediaUrl = await media.getContentTemporaryUrl();
+    }
+  } catch (err) {
+    console.warn('[ChatScreen] media URL error:', err);
+  }
+
+  return {
+    id: m.sid,
+    body: m.body,
+    author: m.author,
+    ts: m.dateCreated,
+    hasMedia: !!media,
+    fileName: media?.filename ?? null,
+    mediaType: media?.contentType ?? '',
+    mediaUrl,
+    _raw: m,
+  };
+}
+
 // ─────────────────────────────────────────────
 // COMPONENT
 // ─────────────────────────────────────────────
-
-// Accepts props from navigation (route.params) set by ConversationsListScreen
 const ChatScreen = ({ route, navigation }) => {
   const { currentUser, targetUser } = route?.params || {};
 
-  const conversationRef = useRef(null);
+  // ── Refs ──
+  const conversationRef  = useRef(null);
+  const paginatorRef     = useRef(null);
+  const flatListRef      = useRef(null);
 
-  const [messages, setMessages] = useState([]);
-  const [text, setText] = useState('');
-  const [loading, setLoading] = useState(true);   // start as loading
-  const [error, setError] = useState(null);
+  // FIX 1: Track whether initial scroll-to-bottom has happened
+  // We use TWO flags:
+  // - messagesReadyRef: messages have been set in state
+  // - hasScrolledOnceRef: we have already done the first scrollToEnd
+  const messagesReadyRef   = useRef(false);
+  const hasScrolledOnceRef = useRef(false);
+
+  const scrollOffsetRef  = useRef(0);
+  const contentHeightRef = useRef(0);
+
+  // Stale-closure-safe refs — onScroll captures state once and never sees updates
+  const loadingMoreRef = useRef(false);
+  const hasMoreRef     = useRef(false);
+
+  // ── State ──
+  const [messages,       setMessages]       = useState([]);
+  const [text,           setText]           = useState('');
+  const [loading,        setLoading]        = useState(true);
+  const [loadingMore,    setLoadingMore]    = useState(false);
+  const [hasMore,        setHasMore]        = useState(false);
+  const [error,          setError]          = useState(null);
   const [uploadProgress, setUploadProgress] = useState(null);
 
-  const flatListRef = useRef(null);
+  // ── Sync helpers: always update ref AND state together ──
+  const setLoadingMoreSync = (val) => {
+    loadingMoreRef.current = val;
+    setLoadingMore(val);
+  };
+
+  const setHasMoreSync = (val) => {
+    hasMoreRef.current = val;
+    setHasMore(val);
+  };
 
   // ─────────────────────────────────────────
-  // AUTO-CONNECT ON MOUNT
+  // MOUNT / UNMOUNT
   // ─────────────────────────────────────────
   useEffect(() => {
     if (currentUser && targetUser) {
@@ -67,29 +119,58 @@ const ChatScreen = ({ route, navigation }) => {
     }
 
     return () => {
-      // Clean up listeners but don't shut down the client
-      // (ConversationsListScreen owns the client lifecycle)
-      if (conversationRef.current) {
-        conversationRef.current.removeAllListeners('messageAdded');
-        conversationRef.current.removeAllListeners('messageRemoved');
+      const convo = conversationRef.current;
+      if (convo) {
+        convo.removeAllListeners('messageAdded');
+        convo.removeAllListeners('messageRemoved');
       }
     };
   }, []);
 
+ 
+  const onContentSizeChange = (_, newHeight) => {
+    contentHeightRef.current = newHeight;
+
+    if (!hasScrolledOnceRef.current && messagesReadyRef.current) {
+      // First time content is sized after messages are ready — jump to bottom
+      flatListRef.current?.scrollToEnd({ animated: false });
+      hasScrolledOnceRef.current = true;
+      return;
+    }
+
+    if (hasScrolledOnceRef.current && !loadingMoreRef.current) {
+      // A new message was added at bottom — scroll down to show it
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }
+
+    // If loadingMore — do nothing here. Scroll position is restored in loadMoreMessages.
+  };
+
+  // ─────────────────────────────────────────
+  // CONNECT
+  // ─────────────────────────────────────────
   const connect = async () => {
     setLoading(true);
     setError(null);
+    messagesReadyRef.current   = false;
+    hasScrolledOnceRef.current = false;
 
     try {
       const convo = await getConversation(currentUser, targetUser);
       conversationRef.current = convo;
 
-      // Load history
-      const page = await convo.getMessages(50);
-      const formattedMessages = await Promise.all(page.items.map(msgToState));
-      setMessages(formattedMessages);
+      const page = await convo.getMessages(20);
+      paginatorRef.current = page;
+      setHasMoreSync(page.hasPrevPage);
 
-      // Real-time listeners
+      const initial = await Promise.all(page.items.map(msgToState));
+
+      // Mark messages ready BEFORE setMessages so onContentSizeChange
+      // sees the flag as true on the very first render
+      messagesReadyRef.current = true;
+      setMessages(initial);
+
+      // ── Real-time listeners ──
       convo.removeAllListeners('messageAdded');
       convo.removeAllListeners('messageRemoved');
 
@@ -106,10 +187,70 @@ const ChatScreen = ({ route, navigation }) => {
       });
 
     } catch (err) {
-      console.log('CHAT CONNECT ERROR', err);
+      console.error('[ChatScreen] connect error:', err);
       setError(err.message || 'Could not load conversation');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ─────────────────────────────────────────
+  // FIX 2 + 3: LOAD OLDER MESSAGES
+  // Triggered when scrolling UP (near top), not down.
+  // After loading, restore scroll so view does not jump.
+  // ─────────────────────────────────────────
+  const loadMoreMessages = async () => {
+    if (loadingMoreRef.current || !hasMoreRef.current || !paginatorRef.current) return;
+
+    setLoadingMoreSync(true);
+
+    // Snapshot height BEFORE React re-renders with prepended messages
+    const heightBefore = contentHeightRef.current;
+
+    try {
+      const prevPage = await paginatorRef.current.prevPage();
+      paginatorRef.current = prevPage;
+      setHasMoreSync(prevPage.hasPrevPage);
+
+      const older = await Promise.all(prevPage.items.map(msgToState));
+
+      // Prepend older messages to the top
+      setMessages(prev => [...older, ...prev]);
+
+      // After layout updates, shift scroll offset by the height that was added
+      // so the currently visible messages stay in view (no jump to top)
+      requestAnimationFrame(() => {
+        const diff = contentHeightRef.current - heightBefore;
+        if (diff > 0) {
+          flatListRef.current?.scrollToOffset({
+            offset: scrollOffsetRef.current + diff,
+            animated: false,
+          });
+        }
+      });
+
+    } catch (err) {
+      console.error('[ChatScreen] loadMore error:', err);
+    } finally {
+      setLoadingMoreSync(false);
+    }
+  };
+
+  // ─────────────────────────────────────────
+  // SCROLL HANDLER
+  // FIX 2: Load older messages when near TOP (offset < 80)
+  // NOT when scrolling down (do not use onEndReached for this)
+  // ─────────────────────────────────────────
+  const onScroll = ({ nativeEvent }) => {
+    const { contentOffset, contentSize } = nativeEvent;
+
+    scrollOffsetRef.current  = contentOffset.y;
+    contentHeightRef.current = contentSize.height;
+
+    // Near TOP = load older messages
+    //  Read refs not state — no stale closure
+    if (contentOffset.y < 80 && hasMoreRef.current && !loadingMoreRef.current) {
+      loadMoreMessages();
     }
   };
 
@@ -126,7 +267,7 @@ const ChatScreen = ({ route, navigation }) => {
     try {
       await sendMessage(convo, temp);
     } catch (err) {
-      console.log('SEND ERROR', err);
+      console.error('[ChatScreen] send error:', err);
       setText(temp);
     }
   };
@@ -147,9 +288,9 @@ const ChatScreen = ({ route, navigation }) => {
       );
     } else {
       Alert.alert('Attach', 'What do you want to send?', [
-        { text: 'Image', onPress: pickImage },
+        { text: 'Image',    onPress: pickImage },
         { text: 'Document', onPress: pickDocument },
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'Cancel',   style: 'cancel' },
       ]);
     }
   };
@@ -160,12 +301,12 @@ const ChatScreen = ({ route, navigation }) => {
       if (result.didCancel || !result.assets?.[0]) return;
       const asset = result.assets[0];
       await uploadFile({
-        uri: asset.uri,
+        uri:  asset.uri,
         name: asset.fileName || `image_${Date.now()}.jpg`,
-        type: asset.type || 'image/jpeg',
+        type: asset.type    || 'image/jpeg',
         size: asset.fileSize,
       });
-    } catch (err) {
+    } catch {
       Alert.alert('Error', 'Could not pick image');
     }
   };
@@ -175,12 +316,12 @@ const ChatScreen = ({ route, navigation }) => {
       const [result] = await pick({ mode: 'open' });
       if (!result) return;
       await uploadFile({
-        uri: result.uri,
+        uri:  result.uri,
         name: result.name,
         type: result.type || 'application/octet-stream',
         size: result.size,
       });
-    } catch (err) {
+    } catch {
       Alert.alert('Error', 'Could not pick file');
     }
   };
@@ -206,27 +347,31 @@ const ChatScreen = ({ route, navigation }) => {
     const convo = conversationRef.current;
     if (!convo || item.author !== currentUser) return;
 
-    Alert.alert('Delete Message?', 'This will remove the message for everyone.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteMessage(convo, item._raw);
-          } catch (err) {
-            Alert.alert('Error', 'Could not delete message');
-          }
+    Alert.alert(
+      'Delete Message?',
+      'This will remove the message for everyone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteMessage(convo, item._raw);
+            } catch {
+              Alert.alert('Error', 'Could not delete message');
+            }
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
   // ─────────────────────────────────────────
   // RENDER MESSAGE
   // ─────────────────────────────────────────
   const renderItem = ({ item }) => {
-    const isMine = item.author === currentUser;
+    const isMine   = item.author === currentUser;
     const hasMedia = item.hasMedia;
 
     return (
@@ -243,8 +388,8 @@ const ChatScreen = ({ route, navigation }) => {
               try {
                 const url = await item.mediaUrl;
                 if (url) Linking.openURL(url);
-              } catch (e) {
-                console.log('OPEN FILE ERROR', e);
+              } catch {
+                console.warn('[ChatScreen] open file error');
               }
             }}
           >
@@ -303,6 +448,7 @@ const ChatScreen = ({ route, navigation }) => {
   // ─────────────────────────────────────────
   return (
     <SafeAreaView style={styles.container}>
+
       {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -327,19 +473,30 @@ const ChatScreen = ({ route, navigation }) => {
           data={messages}
           keyExtractor={item => item.id}
           renderItem={renderItem}
-          contentContainerStyle={{ padding: 16 }}
-          onContentSizeChange={() =>
-            flatListRef.current?.scrollToEnd({ animated: true })
+          contentContainerStyle={{ padding: 16, flexGrow: 1, justifyContent: 'flex-end' }}
+          scrollEventThrottle={16}
+          onScroll={onScroll}
+          onContentSizeChange={onContentSizeChange}
+          // NO onEndReached — we load older messages on scroll UP, not down
+          ListHeaderComponent={
+            loadingMore ? (
+              <ActivityIndicator
+                size="small"
+                color="#007AFF"
+                style={{ marginBottom: 12 }}
+              />
+            ) : hasMore ? (
+              <Text style={styles.loadMoreHint}>Scroll up for older messages</Text>
+            ) : null
           }
           ListEmptyComponent={
             <View style={styles.emptyChat}>
-              <Text style={styles.emptyChatText}>
-                No messages yet. Say hello! 👋
-              </Text>
+              <Text style={styles.emptyChatText}>No messages yet. Say hello! 👋</Text>
             </View>
           }
         />
 
+        {/* UPLOAD PROGRESS */}
         {uploadProgress !== null && (
           <View style={styles.progressBar}>
             <View style={[styles.progressFill, { width: `${uploadProgress}%` }]} />
@@ -347,6 +504,7 @@ const ChatScreen = ({ route, navigation }) => {
           </View>
         )}
 
+        {/* INPUT ROW */}
         <View style={styles.inputRow}>
           <TouchableOpacity style={styles.attachBtn} onPress={onAttach}>
             <Text style={styles.attachIcon}>📎</Text>
@@ -372,34 +530,6 @@ const ChatScreen = ({ route, navigation }) => {
     </SafeAreaView>
   );
 };
-
-// ─────────────────────────────────────────────
-// MAP MESSAGE
-// ─────────────────────────────────────────────
-async function msgToState(m) {
-  const media = m.attachedMedia?.[0];
-  let mediaUrl = null;
-
-  try {
-    if (media?.getContentTemporaryUrl) {
-      mediaUrl = await media.getContentTemporaryUrl();
-    }
-  } catch (err) {
-    console.log('MEDIA URL ERROR', err);
-  }
-
-  return {
-    id: m.sid,
-    body: m.body,
-    author: m.author,
-    ts: m.dateCreated,
-    hasMedia: !!media,
-    fileName: media?.filename || null,
-    mediaType: media?.contentType || '',
-    mediaUrl,
-    _raw: m,
-  };
-}
 
 export default ChatScreen;
 
@@ -543,7 +673,7 @@ const styles = StyleSheet.create({
   emptyChat: {
     flex: 1,
     alignItems: 'center',
-    paddingTop: 80,
+    justifyContent: 'center',
   },
 
   emptyChatText: {
@@ -605,6 +735,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 
+  // ── Upload Progress ──
   progressBar: {
     height: 28,
     backgroundColor: '#e8f4ff',
@@ -631,6 +762,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
+  // ── Media ──
   chatImage: {
     width: 220,
     height: 220,
@@ -642,5 +774,12 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontSize: 11,
     color: '#007AFF',
+  },
+
+  loadMoreHint: {
+    textAlign: 'center',
+    fontSize: 12,
+    color: '#aaa',
+    marginBottom: 10,
   },
 });
