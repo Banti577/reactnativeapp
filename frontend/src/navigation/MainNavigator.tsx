@@ -1,12 +1,19 @@
 import React from 'react';
-import { createNativeStackNavigator }
-    from '@react-navigation/native-stack';
 
-import HomeScreen               from '../../HomeScreen';
-import SearchPage               from '../screens/SearchPage/SearchPage';
-import VoiceScreen              from '../screens/VoiceScreen/VoiceScreen';
-import ChatScreen               from '../screens/ChatScreen/ChatScreen';
-import ConversationsListScreen  from '../screens/ChatScreen/ConversationsListScreen';
+import {
+    createNativeStackNavigator,
+} from '@react-navigation/native-stack';
+
+
+import SearchPage from '../screens/SearchPage/SearchPage';
+import VoiceScreen from '../screens/VoiceScreen/VoiceScreen';
+import ChatScreen from '../screens/ChatScreen/ChatScreen';
+import SmsScreen from '../screens/sendSmsScreen/sendSms';
+import ConversationsListScreen from '../screens/ChatScreen/ConversationsListScreen';
+import HomeScreen from '../screens/HomeScreen/HomeScreen';
+//import HomeScreen from '../../HomeScreen'; //have to use this 
+HomeScreen
+
 
 
 const Stack = createNativeStackNavigator();
@@ -20,21 +27,33 @@ function MainNavigator() {
             }}
         >
 
-            {/* ── Step 1: Register + all conversations ── */}
+            <Stack.Screen
+                name="Home"
+                component={HomeScreen}
+            />
+
+            {/* ── Conversations List ── */}
             <Stack.Screen
                 name="ConversationsList"
                 component={ConversationsListScreen}
             />
 
-            {/* ── Step 2: Individual chat ── */}
+            {/* ── Chat Screen ── */}
             <Stack.Screen
                 name="Chat"
                 component={ChatScreen}
             />
 
+            {/* ── Voice Screen ── */}
             <Stack.Screen
                 name="VoiceScreen"
                 component={VoiceScreen}
+            />
+
+            {/* ── SMS Screen ── */}
+            <Stack.Screen
+                name="SmsScreen"
+                component={SmsScreen}
             />
 
         </Stack.Navigator>
