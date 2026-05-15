@@ -122,6 +122,69 @@ app.delete('/reset', async (req, res) => {
 });
 
 
+app.post('/send-sms', async (req, res) => {
+  try {
+
+    const { to, message } = req.body;
+
+
+    if (!to || !message) {
+      return res.status(400).json({
+        success: false,
+        error: 'to and message required',
+      });
+    }
+
+
+    const response = await client.messages.create({
+      body: message,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: to,
+    });
+
+    console.log('SMS SENT:', response.sid);
+
+    return res.json({
+      success: true,
+      sid: response.sid,
+      status: response.status,
+    });
+
+  } catch (err) {
+
+    console.log('TWILIO SMS ERROR');
+    console.log(err);
+
+    return res.status(500).json({
+      success: false,
+      error: err.message,
+    });
+  }
+});
+
+
+//Incoming msg from user to APP WebHook
+
+
+app.post('/incoming-sms', (req, res) => {
+
+  console.log('INCOMING SMS');
+
+  console.log('FROM:', req.body.From);
+
+  console.log('MESSAGE:', req.body.Body);
+
+  // Later:
+  // save in DB
+  // socket emit
+  // push notification
+  // app sync
+
+  res.sendStatus(200);
+});
+
+
+
 // CREATE / FETCH CONVERSATION
 
 app.post('/conversation', async (req, res) => {
@@ -210,9 +273,10 @@ app.post('/conversation', async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────
-// START SERVER
-// ─────────────────────────────────────────────
+
+
+
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Health: http://0.0.0.0:${PORT}/health`);
