@@ -1,4 +1,4 @@
-// SmsScreen.tsx
+
 
 import React, { useState } from 'react';
 
@@ -10,88 +10,118 @@ import {
   StyleSheet,
   Alert,
 } from 'react-native';
+   import { encode } from 'base-64';
 
-const SmsScreen = () => {
+const accountSid = '';
+const authToken  = '';
+
+const twilioNumber = '+18147475599';
+
+const SmsDirectApi = () => {
 
   const [number, setNumber] = useState<string>('');
   const [message, setMessage] = useState<string>('');
 
   const sendSMS = async (): Promise<void> => {
 
-    const cleanNumber = number.trim();
-
-    // VALIDATION
-
-    if (!cleanNumber) {
-      Alert.alert('Validation', 'Phone number required');
-      return;
-    }
-
-    if (!message.trim()) {
-      Alert.alert('Validation', 'Message required');
-      return;
-    }
-
-    // REMOVE NON DIGITS
-    const onlyDigits = cleanNumber.replace(/\D/g, '');
-
-    // CHECK 10 DIGITS
-    if (onlyDigits.length !== 10) {
-      Alert.alert(
-        'Validation',
-        'Enter valid 10 digit mobile number'
-      );
-      return;
-    }
-
-    // AUTO ADD +91
-    const formattedNumber = `+91${onlyDigits}`;
-
     try {
 
+      const cleanNumber = number.trim();
+
+      if (!cleanNumber) {
+        Alert.alert('Validation', 'Phone number required');
+        return;
+      }
+
+      if (!message.trim()) {
+        Alert.alert('Validation', 'Message required');
+        return;
+      }
+
+
+      const onlyDigits = cleanNumber.replace(/\D/g, '');
+
+      // 10 DIGIT CHECK
+
+      if (onlyDigits.length !== 10) {
+        Alert.alert(
+          'Validation',
+          'Enter valid 10 digit mobile number'
+        );
+        return;
+      }
+
+      // ADD +91
+
+      const formattedNumber = `+91${onlyDigits}`;
+
+      // BASIC AUTH
+
+  
+
+const credentials = encode(
+  `${accountSid}:${authToken}`
+);
+
+
+      const body =
+        `To=${encodeURIComponent(formattedNumber)}` +
+        `&From=${encodeURIComponent(twilioNumber)}` +
+        `&Body=${encodeURIComponent(message.trim())}`;
+
+
+
       const response = await fetch(
-        'http://192.168.0.99:3000/send-sms',
+        `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
         {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
+            Authorization: `Basic ${credentials}`,
+            'Content-Type':
+              'application/x-www-form-urlencoded',
           },
-          body: JSON.stringify({
-            to: formattedNumber,
-            message: message.trim(),
-          }),
+          body,
         }
       );
 
       const data = await response.json();
 
+      console.log('TWILIO RESPONSE');
       console.log(data);
 
-      if (data.success) {
+      if (response.ok) {
 
-        Alert.alert('Success', 'SMS Sent');
+        Alert.alert(
+          'Success',
+          `SMS Sent\n${data.sid}`
+        );
 
-        // CLEAR INPUTS
         setNumber('');
         setMessage('');
 
       } else {
 
-        Alert.alert('Error', data.error);
+        Alert.alert(
+          'Twilio Error',
+          data.message || 'SMS failed'
+        );
       }
 
     } catch (error: any) {
 
       console.log(error);
 
-      Alert.alert('Error', error.message);
+      Alert.alert(
+        'Error',
+        error.message
+      );
     }
   };
 
   return (
     <View style={styles.container}>
 
-      {/* PHONE INPUT */}
+      {/* PHONE */}
 
       <View style={styles.phoneContainer}>
 
@@ -113,7 +143,7 @@ const SmsScreen = () => {
 
       </View>
 
-      {/* MESSAGE INPUT */}
+      {/* MESSAGE */}
 
       <TextInput
         placeholder="Enter Message"
@@ -139,7 +169,7 @@ const SmsScreen = () => {
   );
 };
 
-export default SmsScreen;
+export default SmsDirectApi;
 
 const styles = StyleSheet.create({
 

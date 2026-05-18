@@ -21,6 +21,7 @@
     "@twilio/conversations": "^3.0.0",
     "@twilio/voice-react-native-sdk": "^1.7.0",
     "axios": "^1.16.0",
+    "base-64": "^1.0.0",
     "react": "19.2.3",
     "react-native": "0.85.2",
     "react-native-get-random-values": "^2.0.0",
@@ -30,6 +31,7 @@
     "react-native-svg": "^15.15.4",
     "react-native-vector-icons": "^10.3.0",
     "react-redux": "^9.2.0",
+    "twilio": "^6.0.2",
     "uuid": "^14.0.0"
   },
   "devDependencies": {
