@@ -1,5 +1,6 @@
 import React, {
   useEffect,
+  useRef,
   useState,
 } from 'react';
 
@@ -23,7 +24,7 @@ import {
 import {
   registerVoice,
   makeVoiceCall,
-} from '../../services/twilioVoice';
+} from '../../features/voice/services/phoneService';
 
 const PhoneScreen = ({ navigation }: any) => {
 
@@ -39,6 +40,7 @@ const PhoneScreen = ({ navigation }: any) => {
   const [call, setCall] =
     useState<Call | null>(null);
 
+  const tokenRef = useRef<string | null>(null);
 
   useEffect(() => {
 
@@ -54,7 +56,7 @@ const PhoneScreen = ({ navigation }: any) => {
 
       setCallStatus('Registering...');
 
-      await registerVoice('user1');
+      tokenRef.current = await registerVoice('bunty');
 
       setCallStatus('Ready to call');
 
@@ -103,7 +105,10 @@ const PhoneScreen = ({ navigation }: any) => {
 
       // START CALL
       const activeCall =
-        await makeVoiceCall(phoneNumber);
+        await makeVoiceCall(
+          tokenRef.current,
+          phoneNumber,
+        );
 
       if (!activeCall) {
 

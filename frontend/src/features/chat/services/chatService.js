@@ -1,6 +1,6 @@
 import { Client } from '@twilio/conversations';
 
-const BACKEND_URL = 'http://10.159.80.1:3000';
+const BACKEND_URL = 'http://192.168.4.200:3000';
 
 // Timeout constants — change in one place
 const INIT_TIMEOUT_MS  = 15_000;
@@ -56,7 +56,7 @@ export async function initChat(identity) {
         // ─────────────────────────
         // CREATE CLIENT
         // ─────────────────────────
-        twilioClient = new Client('token');
+        twilioClient = new Client(token);
 
         // ─────────────────────────
         // WAIT FOR INITIALIZED

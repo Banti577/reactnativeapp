@@ -51,12 +51,7 @@ const SmsDirectApi = () => {
         return;
       }
 
-      // ADD +91
-
-      const formattedNumber = `+91${onlyDigits}`;
-
-      // BASIC AUTH
-
+      const formattedNumber = `+91${onlyDigits}`
   
 
 const credentials = encode(
@@ -143,7 +138,6 @@ const credentials = encode(
 
       </View>
 
-      {/* MESSAGE */}
 
       <TextInput
         placeholder="Enter Message"
@@ -154,7 +148,7 @@ const credentials = encode(
         style={[styles.input, styles.messageInput]}
       />
 
-      {/* BUTTON */}
+  
 
       <TouchableOpacity
         style={styles.button}

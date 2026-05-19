@@ -20,7 +20,7 @@ import {
   shutdownChat,
   getAllConversations,
   getConversation,
-} from '../../services/chatService';
+} from '../../features/chat/services/chatService';
 
 // ─────────────────────────────────────────────
 // HELPERS
@@ -223,9 +223,10 @@ const ConversationsListScreen = ({ navigation }) => {
     }
   }, [currentUser, listOpacity]);
 
-  // ─────────────────────────────────────────
-  // REGISTER / LOGIN
-  // ─────────────────────────────────────────
+
+
+
+  
   const handleRegister = async () => {
     const me = username.trim();
     if (!me) return setError('Please enter a username');
