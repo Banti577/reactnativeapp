@@ -11,6 +11,8 @@ import ChatScreen from '../screens/ChatScreen/ChatScreen';
 import SmsScreen from '../screens/sendSmsScreen/sendSms';
 import ConversationsListScreen from '../screens/ChatScreen/ConversationsListScreen';
 import HomeScreen from '../screens/HomeScreen/HomeScreen';
+
+import PhoneScreen from '../screens/PhoneScreen/PhoneScreen'
 //import HomeScreen from '../../HomeScreen'; //have to use this 
 HomeScreen
 
@@ -30,6 +32,12 @@ function MainNavigator() {
             <Stack.Screen
                 name="Home"
                 component={HomeScreen}
+            />
+
+
+                <Stack.Screen
+                name="PhoneScreen"
+                component={PhoneScreen}
             />
 
             {/* ── Conversations List ── */}

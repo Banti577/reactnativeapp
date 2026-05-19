@@ -22,6 +22,9 @@ const apiSecret =
 const conversationsServiceSid =
   process.env.TWILIO_CONVERSATIONS_SERVICE_SID;
 
+const twimlAppSid =
+  process.env.TWIML_APP_SID;
+
 
 
 // TWILIO
@@ -30,6 +33,7 @@ const client = twilio(accountSid, authToken);
 
 const { AccessToken } = twilio.jwt;
 const { ChatGrant } = AccessToken;
+const { VoiceGrant } = AccessToken;
 
 // ─────────────────────────────────────────────
 // SCOPED SERVICE HELPER
@@ -40,6 +44,7 @@ const svc = () =>
 
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 
 // TOKEN
@@ -57,9 +62,18 @@ app.get('/voice/token', (req, res) => {
       ttl: 3600,
     });
 
+
+
     token.addGrant(
       new ChatGrant({
         serviceSid: conversationsServiceSid,
+      })
+    );
+
+    token.addGrant(
+      new VoiceGrant({
+        outgoingApplicationSid: twimlAppSid,
+        incomingAllow: true,
       })
     );
 
@@ -181,6 +195,74 @@ app.post('/incoming-sms', (req, res) => {
   // app sync
 
   res.sendStatus(200);
+});
+
+
+
+// Create APP to phone call
+
+app.post("/make-call", async (req, res) => {
+  try {
+    console.log('req body is', req.body)
+    const { phoneNumber } = req.body;
+
+
+    const call = await client.calls.create({
+      to: phoneNumber, // user phone number
+      from: process.env.TWILIO_PHONE_NUMBER,
+      twiml: `
+        <Response>
+          <Say voice="alice">
+            Hello. This call is from your React Native application.
+          </Say>
+        </Response>
+      `,
+    });
+
+    console.log('this is call status', call)
+
+    res.json({
+      success: true,
+      callSid: call.sid,
+    });
+  } catch (error) {
+    console.log(error);
+
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+//for TwiMl voice route called by  twilio webhook
+
+
+app.post('/voice', (req, res) => {
+  try {
+    console.log('VOICE WEBHOOK HIT');
+
+    const VoiceResponse = twilio.twiml.VoiceResponse;
+
+    const response = new VoiceResponse();
+
+    const dial = response.dial({
+      callerId: process.env.TWILIO_PHONE_NUMBER,
+    });
+
+
+
+    dial.number(req.body.To || req.query.To);
+
+    res.type('text/xml');
+
+    return res.send(response.toString());
+
+  } catch (err) {
+    console.log(err);
+
+    return res.status(500).send(err.message);
+  }
 });
 
 

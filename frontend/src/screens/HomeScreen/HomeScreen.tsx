@@ -18,6 +18,15 @@ const HomeScreen = () => {
   return (
     <View style={styles.container}>
 
+        <TouchableOpacity
+        style={styles.button}
+        onPress={() => navigation.navigate('PhoneScreen')}
+      >
+        <Text style={styles.buttonText}>
+          App To phone call
+        </Text>
+      </TouchableOpacity>
+
       <TouchableOpacity
         style={styles.button}
         onPress={() => navigation.navigate('ConversationsList')}
