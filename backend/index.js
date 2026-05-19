@@ -251,8 +251,10 @@ app.post('/voice', (req, res) => {
     });
 
 
-
+console.log('req body is', req.body.To)
     dial.number(req.body.To || req.query.To);
+
+
 
     res.type('text/xml');
 

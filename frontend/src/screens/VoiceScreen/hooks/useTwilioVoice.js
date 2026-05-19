@@ -3,8 +3,8 @@ import { Alert } from 'react-native';
 
 import messaging from '@react-native-firebase/messaging';
 
-import { fetchTwilioToken } from '../services/voiceApi';
-import { voice } from '../services/twilioVoice';
+import { fetchTwilioToken } from '../../../services/generateTokenApi';
+import { voice } from '../../../services/twilioVoice';
 import { requestVoicePermissions } from '../utils/permissions';
 
 export const useTwilioVoice = () => {

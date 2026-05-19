@@ -3,6 +3,6 @@
   "compilerOptions": {
     "types": ["jest"]
   },
-  "include": ["**/*.ts", "**/*.tsx", "src/screens/header", "src/screens/ChatScreen/ChatScreen.jsx"],
+  "include": ["**/*.ts", "**/*.tsx", "src/screens/header", "src/screens/ChatScreen/ChatScreen.jsx", "src/services/twilioVoice.js"],
   "exclude": ["**/node_modules", "**/Pods"]
 }

@@ -23,7 +23,7 @@ import {
 import {
   registerVoice,
   makeVoiceCall,
-} from '../VoiceScreen/services/twilioVoice';
+} from '../../services/twilioVoice';
 
 const PhoneScreen = ({ navigation }: any) => {
 
