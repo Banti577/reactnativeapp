@@ -1,7 +1,17 @@
 import React from 'react';
 import { StyleSheet, TextInput } from 'react-native';
 
-const VoiceTextInput = ({ placeholder, value, onChangeText }) => (
+type VoiceTextInputProps = {
+  placeholder: string;
+  value: string;
+  onChangeText: (value: string) => void;
+};
+
+const VoiceTextInput = ({
+  placeholder,
+  value,
+  onChangeText,
+}: VoiceTextInputProps) => (
   <TextInput
     style={styles.input}
     placeholder={placeholder}

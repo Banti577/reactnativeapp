@@ -4,8 +4,9 @@ import { useDispatch, useSelector } from 'react-redux';
 
 import { Call, Voice } from '@twilio/voice-react-native-sdk';
 
-import { VOICE_STATUS } from '../../../constants/voice';
+import { VOICE_STATUS, VoiceStatus } from '../../../constants/voice';
 import { logger } from '../../../utils/logger';
+import type { AppDispatch, RootState } from '../../../../redux/store';
 import {
   clearIncomingCall,
   clearVoiceError,
@@ -26,17 +27,44 @@ import {
 } from '../services/phoneService';
 import { validateOutboundPhoneNumber } from '../domain/voiceValidation';
 
-export const useVoiceCall = () => {
-  const dispatch = useDispatch();
-  const voiceState = useSelector(state => state.voice);
+type VoiceCallHook = {
+  acceptCall: () => Promise<Call | null>;
+  activeCall: Call | null;
+  call: () => Promise<Call | null>;
+  callerName: string;
+  endCall: () => Promise<void>;
+  error: string | null;
+  hasActiveCall: boolean;
+  hasIncomingCall: boolean;
+  identity: string;
+  incomingInvite: any;
+  isMuted: boolean;
+  loading: boolean;
+  logs: string[];
+  phoneNumber: string;
+  register: () => Promise<void>;
+  rejectCall: () => void;
+  setIdentity: (value: string) => void;
+  setPhoneNumber: (value: string) => void;
+  status: VoiceStatus;
+  toggleMute: () => Promise<void>;
+};
 
-  const [incomingInvite, setIncomingInvite] = useState(null);
-  const [logs, setLogs] = useState([]);
+const getErrorMessage = (error: unknown, fallback: string) => {
+  return error instanceof Error ? error.message : fallback;
+};
 
-  const callRef = useRef(null);
-  const tokenRef = useRef(null);
+export const useVoiceCall = (): VoiceCallHook => {
+  const dispatch = useDispatch<AppDispatch>();
+  const voiceState = useSelector((state: RootState) => state.voice);
 
-  const log = useCallback(message => {
+  const [incomingInvite, setIncomingInvite] = useState<any>(null);
+  const [logs, setLogs] = useState<string[]>([]);
+
+  const callRef = useRef<Call | null>(null);
+  const tokenRef = useRef<string | null>(null);
+
+  const log = useCallback((message: string) => {
     logger.info('voice-call', message);
 
     setLogs(prev => [
@@ -45,27 +73,27 @@ export const useVoiceCall = () => {
     ]);
   }, []);
 
-  const clearCall = useCallback(nextStatus => {
+  const clearCall = useCallback((nextStatus: VoiceStatus) => {
     callRef.current = null;
     dispatch(resetVoiceCall(nextStatus));
   }, [dispatch]);
 
   const attachCallListeners = useCallback(
-    call => {
-      call.on(Call.Event.Connected, () => {
+    (callInstance: Call) => {
+      callInstance.on(Call.Event.Connected, () => {
         log('Call connected');
         dispatch(setVoiceStatus(VOICE_STATUS.CONNECTED));
       });
 
-      call.on(Call.Event.Disconnected, () => {
+      callInstance.on(Call.Event.Disconnected, () => {
         log('Call ended');
         clearCall(VOICE_STATUS.READY);
       });
 
-      call.on(Call.Event.ConnectFailure, err => {
+      callInstance.on(Call.Event.ConnectFailure, (err: unknown) => {
         logger.error('voice-call', 'connect failed', err);
         log('Call failed');
-        dispatch(setVoiceError(err?.message || 'Call failed'));
+        dispatch(setVoiceError(getErrorMessage(err, 'Call failed')));
         clearCall(VOICE_STATUS.READY);
       });
     },
@@ -91,8 +119,8 @@ export const useVoiceCall = () => {
       dispatch(setVoiceStatus(VOICE_STATUS.READY));
     } catch (err) {
       logger.error('voice-call', 'registration failed', err);
-      log('Register failed: ' + (err?.message || 'Registration failed'));
-      dispatch(setVoiceError(err?.message || 'Voice registration failed'));
+      log('Register failed: ' + getErrorMessage(err, 'Registration failed'));
+      dispatch(setVoiceError(getErrorMessage(err, 'Voice registration failed')));
       dispatch(setVoiceStatus(VOICE_STATUS.IDLE));
       throw err;
     } finally {
@@ -123,8 +151,8 @@ export const useVoiceCall = () => {
       return nextCall;
     } catch (err) {
       logger.error('voice-call', 'call failed', err);
-      log('Call error: ' + (err?.message || 'Call failed'));
-      dispatch(setVoiceError(err?.message || 'Call failed'));
+      log('Call error: ' + getErrorMessage(err, 'Call failed'));
+      dispatch(setVoiceError(getErrorMessage(err, 'Call failed')));
       clearCall(VOICE_STATUS.FAILED);
       throw err;
     } finally {
@@ -177,7 +205,7 @@ export const useVoiceCall = () => {
   }, [dispatch, log, voiceState.isMuted]);
 
   useEffect(() => {
-    const handleInvite = invite => {
+    const handleInvite = (invite: any) => {
       setIncomingInvite(invite);
       dispatch(setIncomingCall({ callerName: invite?.from || 'Unknown' }));
       log('Incoming call from: ' + (invite?.from || 'Unknown'));
@@ -209,8 +237,8 @@ export const useVoiceCall = () => {
     phoneNumber: voiceState.phoneNumber,
     register,
     rejectCall,
-    setIdentity: value => dispatch(setReduxIdentity(value)),
-    setPhoneNumber: value => dispatch(setReduxPhoneNumber(value)),
+    setIdentity: (value: string) => dispatch(setReduxIdentity(value)),
+    setPhoneNumber: (value: string) => dispatch(setReduxPhoneNumber(value)),
     status: voiceState.status,
     toggleMute,
   };

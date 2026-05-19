@@ -1,10 +1,24 @@
-import { createSlice } from '@reduxjs/toolkit';
+import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
-const initialState = {
+import { VOICE_STATUS, VoiceStatus } from '../../src/constants/voice';
+
+type VoiceState = {
+  identity: string;
+  phoneNumber: string;
+  status: VoiceStatus;
+  error: string | null;
+  callerName: string;
+  isMuted: boolean;
+  loading: boolean;
+  hasIncomingCall: boolean;
+  hasActiveCall: boolean;
+};
+
+const initialState: VoiceState = {
   identity: 'bunty',
   phoneNumber: '',
-  status: 'idle',
-  error: null as string | null,
+  status: VOICE_STATUS.IDLE,
+  error: null,
   callerName: '',
   isMuted: false,
   loading: false,
@@ -16,45 +30,45 @@ const voiceSlice = createSlice({
   name: 'voice',
   initialState,
   reducers: {
-    setIdentity: (state, action) => {
+    setIdentity: (state, action: PayloadAction<string>) => {
       state.identity = action.payload;
     },
-    setPhoneNumber: (state, action) => {
+    setPhoneNumber: (state, action: PayloadAction<string>) => {
       state.phoneNumber = action.payload;
     },
-    setVoiceStatus: (state, action) => {
+    setVoiceStatus: (state, action: PayloadAction<VoiceStatus>) => {
       state.status = action.payload;
     },
-    setVoiceLoading: (state, action) => {
+    setVoiceLoading: (state, action: PayloadAction<boolean>) => {
       state.loading = action.payload;
     },
-    setVoiceError: (state, action) => {
+    setVoiceError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload;
     },
     clearVoiceError: state => {
       state.error = null;
     },
-    setIncomingCall: (state, action) => {
+    setIncomingCall: (state, action: PayloadAction<{ callerName?: string }>) => {
       state.hasIncomingCall = true;
       state.callerName = action.payload?.callerName || 'Unknown';
-      state.status = 'incoming';
+      state.status = VOICE_STATUS.INCOMING;
     },
     clearIncomingCall: state => {
       state.hasIncomingCall = false;
       state.callerName = '';
     },
-    setActiveCall: (state, action) => {
+    setActiveCall: (state, action: PayloadAction<boolean>) => {
       state.hasActiveCall = action.payload;
     },
-    setMuted: (state, action) => {
+    setMuted: (state, action: PayloadAction<boolean>) => {
       state.isMuted = action.payload;
     },
-    resetVoiceCall: (state, action) => {
+    resetVoiceCall: (state, action: PayloadAction<VoiceStatus | undefined>) => {
       state.hasActiveCall = false;
       state.hasIncomingCall = false;
       state.callerName = '';
       state.isMuted = false;
-      state.status = action.payload || 'ready';
+      state.status = action.payload || VOICE_STATUS.READY;
     },
   },
 });
@@ -74,4 +88,3 @@ export const {
 } = voiceSlice.actions;
 
 export default voiceSlice.reducer;
-

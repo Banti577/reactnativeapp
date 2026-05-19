@@ -1,4 +1,4 @@
-import { Voice } from '@twilio/voice-react-native-sdk';
+import { Call, Voice } from '@twilio/voice-react-native-sdk';
 
 import { VOICE_ERRORS } from '../../../constants/voice';
 import { fetchTwilioToken } from '../../../services/api/twilioTokenApi';
@@ -9,7 +9,7 @@ export const voice = new Voice();
 
 const scope = 'phone-service';
 
-export const registerVoice = async identity => {
+export const registerVoice = async (identity: string): Promise<string> => {
   const hasPermission = await requestMicrophonePermission();
 
   if (!hasPermission) {
@@ -24,7 +24,7 @@ export const registerVoice = async identity => {
   return token;
 };
 
-export const unregisterVoice = async token => {
+export const unregisterVoice = async (token?: string | null): Promise<void> => {
   if (!token) {
     return;
   }
@@ -32,7 +32,10 @@ export const unregisterVoice = async token => {
   await voice.unregister(token);
 };
 
-export const makeVoiceCall = async (token, phoneNumber) => {
+export const makeVoiceCall = async (
+  token: string | null,
+  phoneNumber: string,
+): Promise<Call> => {
   if (!token) {
     throw new Error(VOICE_ERRORS.TOKEN_MISSING);
   }

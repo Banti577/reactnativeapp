@@ -1,6 +1,7 @@
 import { PermissionsAndroid, Platform } from 'react-native';
+import type { Permission } from 'react-native';
 
-export const requestMicrophonePermission = async () => {
+export const requestMicrophonePermission = async (): Promise<boolean> => {
   if (Platform.OS !== 'android') {
     return true;
   }
@@ -12,18 +13,18 @@ export const requestMicrophonePermission = async () => {
   return granted === PermissionsAndroid.RESULTS.GRANTED;
 };
 
-export const requestVoicePermissions = async () => {
+export const requestVoicePermissions = async (): Promise<boolean> => {
   if (Platform.OS !== 'android') {
     return true;
   }
 
-  const permissions = [PermissionsAndroid.PERMISSIONS.RECORD_AUDIO];
+  const permissions: Permission[] = [PermissionsAndroid.PERMISSIONS.RECORD_AUDIO];
 
-  if (Platform.Version >= 33) {
+  if (Number(Platform.Version) >= 33) {
     permissions.push(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
   }
 
-  if (Platform.Version >= 31) {
+  if (Number(Platform.Version) >= 31) {
     permissions.push(PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT);
   }
 
@@ -33,4 +34,3 @@ export const requestVoicePermissions = async () => {
     permission => result[permission] === PermissionsAndroid.RESULTS.GRANTED,
   );
 };
-

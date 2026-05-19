@@ -11,12 +11,27 @@ const SYNC_MAX_RETRIES = 10;
 // Max file size: 150MB (Twilio MCS limit)
 const MAX_FILE_SIZE_BYTES = 150 * 1024 * 1024;
 
-let twilioClient = null;
+type TwilioClient = InstanceType<typeof Client>;
+type Conversation = any;
+type ChatMessage = any;
+type UploadFile = {
+    uri: string;
+    name: string;
+    type: string;
+    size?: number;
+};
+type UploadProgressCallback = (percent: number) => void;
+
+let twilioClient: TwilioClient | null = null;
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+    return error instanceof Error ? error.message : fallback;
+};
 
 /**
  * Returns a promise that rejects after `ms` milliseconds.
  */
-function timeout(ms, label = 'Operation') {
+function timeout(ms: number, label = 'Operation'): Promise<never> {
     return new Promise((_, reject) =>
         setTimeout(
             () => reject(new Error(`${label} timed out after ${ms}ms`)),
@@ -25,7 +40,12 @@ function timeout(ms, label = 'Operation') {
     );
 }
 
-function waitForEvent(emitter, event, ms, label) {
+function waitForEvent(
+    emitter: any,
+    event: string,
+    ms: number,
+    label: string,
+) {
     return Promise.race([
         new Promise(resolve => emitter.once(event, resolve)),
         timeout(ms, label),
@@ -33,7 +53,7 @@ function waitForEvent(emitter, event, ms, label) {
 }
 
 
-export async function initChat(identity) {
+export async function initChat(identity: string): Promise<TwilioClient> {
 
     // Cleanup any existing client first
     await shutdownChat();
@@ -47,11 +67,11 @@ export async function initChat(identity) {
         );
 
         if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
+            const err = (await res.json().catch(() => ({}))) as { error?: string };
             throw new Error(err.error || `Token fetch failed: ${res.status}`);
         }
 
-        const { token } = await res.json();
+        const { token } = await res.json() as { token: string };
 
         // ─────────────────────────
         // CREATE CLIENT
@@ -62,9 +82,9 @@ export async function initChat(identity) {
         // WAIT FOR INITIALIZED
         // ─────────────────────────
         await Promise.race([
-            new Promise((resolve, reject) => {
-                twilioClient.once('initialized', resolve);
-                twilioClient.once('initFailed', ({ error }) =>
+            new Promise<void>((resolve, reject) => {
+                twilioClient?.once('initialized', () => resolve());
+                twilioClient?.once('initFailed', ({ error }: { error?: unknown }) =>
                     reject(error || new Error('Twilio init failed'))
                 );
             }),
@@ -94,13 +114,13 @@ export async function initChat(identity) {
     } catch (err) {
         await shutdownChat();
         console.log('this is full err', err)
-        console.log('INIT CHAT ERROR:', err.message);
+        console.log('INIT CHAT ERROR:', getErrorMessage(err, 'Init chat failed'));
         throw err;
     }
 }
 
 
-export async function getConversation(user1, user2) {
+export async function getConversation(user1: string, user2: string): Promise<Conversation> {
 
     if (!twilioClient) {
         throw new Error('Call initChat() first');
@@ -128,14 +148,14 @@ export async function getConversation(user1, user2) {
 
         // Path 1: SDK fires the event — instant
         new Promise(resolve => {
-            function onJoined(c) {
+            function onJoined(c: Conversation) {
                 if (c.sid === conversationSid) {
-                    twilioClient.off('conversationJoined', onJoined);
+                    twilioClient?.off('conversationJoined', onJoined);
                     console.log('SYNCED via event:', c.sid);
                     resolve(c);
                 }
             }
-            twilioClient.on('conversationJoined', onJoined);
+            twilioClient?.on('conversationJoined', onJoined);
         }),
 
         // Path 2: Polling fallback (rare — SDK already joined before listener)
@@ -162,7 +182,7 @@ export async function getConversation(user1, user2) {
 
 // SEND TEXT MESSAGE
 
-export async function sendMessage(conversation, text) {
+export async function sendMessage(conversation: Conversation, text: string): Promise<void> {
 
     if (!conversation) throw new Error('Conversation missing');
 
@@ -175,7 +195,11 @@ export async function sendMessage(conversation, text) {
 
 
 //SENDING DOC AND FILE
-export async function sendFile(conversation, file, onProgress) {
+export async function sendFile(
+    conversation: Conversation,
+    file: UploadFile,
+    onProgress?: UploadProgressCallback,
+): Promise<number> {
 
     if (!conversation) throw new Error('Conversation missing');
 
@@ -210,7 +234,7 @@ export async function sendFile(conversation, file, onProgress) {
         contentType: file.type,
 
         onProgress: onProgress
-            ? (bytes, total) => {
+            ? (bytes: number, total: number) => {
                   if (total > 0) {
                       onProgress(Math.round((bytes / total) * 100));
                   }
@@ -226,7 +250,10 @@ export async function sendFile(conversation, file, onProgress) {
 
 // DELETE MESSAGE
 
-export async function deleteMessage(conversation, message) {
+export async function deleteMessage(
+    conversation: Conversation,
+    message: ChatMessage,
+): Promise<void> {
 
     if (!conversation) throw new Error('Conversation missing');
     if (!message)      throw new Error('Message missing');
@@ -236,13 +263,16 @@ export async function deleteMessage(conversation, message) {
     console.log(' MESSAGE DELETED, index:', message.index);
 }
 
-export async function deleteMessageByIndex(conversation, messageIndex) {
+export async function deleteMessageByIndex(
+    conversation: Conversation,
+    messageIndex: number,
+): Promise<void> {
 
     if (!conversation) throw new Error('Conversation missing');
 
     const paginator = await conversation.getMessages();
 
-    const message = paginator.items.find(m => m.index === messageIndex);
+    const message = paginator.items.find((m: ChatMessage) => m.index === messageIndex);
 
     if (!message) {
         throw new Error(`Message with index ${messageIndex} not found`);
@@ -252,7 +282,7 @@ export async function deleteMessageByIndex(conversation, messageIndex) {
 }
 
 
-export async function getMessages(conversation, pageSize = 30) {
+export async function getMessages(conversation: Conversation, pageSize = 30) {
 
     if (!conversation) throw new Error('Conversation missing');
 
@@ -262,7 +292,7 @@ export async function getMessages(conversation, pageSize = 30) {
 // ─────────────────────────────────────────────
 // SHUTDOWN CHAT
 // ─────────────────────────────────────────────
-export async function shutdownChat() {
+export async function shutdownChat(): Promise<void> {
 
     if (!twilioClient) return;
 
@@ -270,7 +300,7 @@ export async function shutdownChat() {
         await twilioClient.shutdown();
         console.log('CHAT SHUTDOWN');
     } catch (err) {
-        console.log('SHUTDOWN ERROR:', err.message);
+        console.log('SHUTDOWN ERROR:', getErrorMessage(err, 'Shutdown failed'));
     } finally {
         twilioClient = null;
     }
@@ -280,7 +310,7 @@ export async function shutdownChat() {
 // ─────────────────────────────────────────────
 // GET ALL CONVERSATIONS
 // ─────────────────────────────────────────────
-export async function getAllConversations() {
+export async function getAllConversations(): Promise<Conversation[]> {
 
     if (!twilioClient) {
         throw new Error('Call initChat() first');

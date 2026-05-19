@@ -1,7 +1,14 @@
 import { VOICE_ERRORS } from '../../../constants/voice';
 import { isE164PhoneNumber, normalizePhoneNumber } from '../../../utils/phoneNumber';
 
-export const validateOutboundPhoneNumber = value => {
+type PhoneValidationResult = {
+  phoneNumber: string;
+  error: string | null;
+};
+
+export const validateOutboundPhoneNumber = (
+  value?: string | null,
+): PhoneValidationResult => {
   const phoneNumber = normalizePhoneNumber(value);
 
   if (!phoneNumber) {
@@ -23,4 +30,3 @@ export const validateOutboundPhoneNumber = value => {
     error: null,
   };
 };
-

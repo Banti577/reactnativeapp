@@ -2,10 +2,18 @@ import { View, Text, Image, StyleSheet, ScrollView } from "react-native";
 
 import { useEffect, useState } from 'react';
 
+type Movie = {
+    id?: string | number;
+    title?: string;
+};
+
+type MoviesResponse = {
+    movies?: Movie[];
+};
 
 function NewMoviesSlider() {
 
-    const [movies, setMovies] = useState([]);
+    const [movies, setMovies] = useState<Movie[]>([]);
 
     const fetchMovies = async () => {
         try {
@@ -21,7 +29,7 @@ function NewMoviesSlider() {
                 }
             );
 
-            const data = await response.json();
+            const data = await response.json() as MoviesResponse;
 
             console.log('this is data', data);
 

@@ -10,10 +10,10 @@ import {
   StyleSheet,
   Alert,
 } from 'react-native';
-   import { encode } from 'base-64';
+import { encode } from 'base-64';
 
 const accountSid = '';
-const authToken  = '';
+const authToken = '';
 
 const twilioNumber = '+18147475599';
 
@@ -52,11 +52,11 @@ const SmsDirectApi = () => {
       }
 
       const formattedNumber = `+91${onlyDigits}`
-  
 
-const credentials = encode(
-  `${accountSid}:${authToken}`
-);
+
+      const credentials = encode(
+        `${accountSid}:${authToken}`
+      );
 
 
       const body =
@@ -79,7 +79,10 @@ const credentials = encode(
         }
       );
 
-      const data = await response.json();
+      const data = await response.json() as {
+        message?: string;
+        sid?: string;
+      };
 
       console.log('TWILIO RESPONSE');
       console.log(data);
@@ -88,7 +91,7 @@ const credentials = encode(
 
         Alert.alert(
           'Success',
-          `SMS Sent\n${data.sid}`
+          `SMS Sent\n${data.sid ?? ''}`
         );
 
         setNumber('');
@@ -148,7 +151,7 @@ const credentials = encode(
         style={[styles.input, styles.messageInput]}
       />
 
-  
+
 
       <TouchableOpacity
         style={styles.button}

@@ -1,7 +1,19 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity } from 'react-native';
 
-const VoiceActionButton = ({ title, onPress, variant = 'primary' }) => (
+type VoiceActionButtonVariant = 'primary' | 'success' | 'danger';
+
+type VoiceActionButtonProps = {
+  title: string;
+  onPress: () => void | Promise<unknown>;
+  variant?: VoiceActionButtonVariant;
+};
+
+const VoiceActionButton = ({
+  title,
+  onPress,
+  variant = 'primary',
+}: VoiceActionButtonProps) => (
   <TouchableOpacity
     style={[styles.button, styles[variant]]}
     onPress={onPress}
