@@ -199,6 +199,34 @@ app.post('/incoming-sms', (req, res) => {
 
 
 
+//incoming call from phone 
+
+
+app.post(
+    '/incoming-phonecall',
+    (req, res) => {
+
+        console.log(
+            'Incoming phone call'
+        );
+
+        const twiml =
+            new twilio.twiml.VoiceResponse();
+
+        const dial =
+            twiml.dial();
+
+        dial.client('bunty');
+
+        res.type('text/xml');
+
+        res.send(
+            twiml.toString()
+        );
+    }
+);
+
+
 // Create APP to phone call
 
 app.post("/make-call", async (req, res) => {

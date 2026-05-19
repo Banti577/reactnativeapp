@@ -68,6 +68,49 @@ export async function registerVoice(
             'VOICE REGISTERED'
         );
 
+
+          voice.on(
+            Voice.Event.CallInvite,
+            (invite) => {
+
+                console.log(
+                    'INCOMING CALL'
+                );
+
+                console.log(invite);
+
+                // AUTO ACCEPT FOR TESTING
+                invite.accept();
+            }
+        );
+
+
+        // CALL CONNECTED
+        voice.on(
+            Voice.Event.Connected,
+            (call) => {
+
+                console.log(
+                    'CALL CONNECTED'
+                );
+            }
+        );
+
+
+        // CALL DISCONNECTED
+        voice.on(
+            Voice.Event.Disconnected,
+            (call) => {
+
+                console.log(
+                    'CALL DISCONNECTED'
+                );
+            }
+        );
+
+
+
+
     } catch (err) {
 
         console.log(
