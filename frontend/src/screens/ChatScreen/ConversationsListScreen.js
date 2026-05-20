@@ -130,9 +130,9 @@ const ConversationItem = ({ item, onPress }) => {
   );
 };
 
-// ─────────────────────────────────────────────
+
 // MAIN SCREEN
-// ─────────────────────────────────────────────
+
 const ConversationsListScreen = ({ navigation }) => {
   // ── Registration state ──
   const [username, setUsername] = useState('');
@@ -187,6 +187,20 @@ const ConversationsListScreen = ({ navigation }) => {
               lastMessageTime = convo.dateUpdated || null;
             }
 
+
+            // const last = convo.lastMessage;
+
+            // if (last) {
+            //   lastMessage =
+            //     last.body || '📎 Attachment';
+
+            //   lastMessageTime =
+            //     last.dateCreated;
+            // } else {
+            //   lastMessageTime =
+            //     convo.dateUpdated || null;
+            // }
+
             unread = await convo.getUnreadMessagesCount() || 0;
           } catch (_) { }
 
@@ -225,8 +239,195 @@ const ConversationsListScreen = ({ navigation }) => {
 
 
 
+//   const loadConversations = useCallback(
+//   async (identityOverride) => {
 
-  
+//     const myIdentity =
+//       identityOverride || currentUser;
+
+//     try {
+
+//       const all =
+//         await getAllConversations();
+
+//       // STEP 1
+//       // FAST INITIAL RENDER
+
+//       const initial = all.map((convo) => ({
+//         sid: convo.sid,
+
+//         otherUser:
+//           getOtherParticipant(
+//             convo,
+//             myIdentity
+//           ),
+
+//         lastMessage:
+//           'Loading...',
+
+//         lastMessageTime:
+//           convo.lastMessage?.dateCreated ||
+//           convo.dateUpdated ||
+//           null,
+
+//         unread: 0,
+
+//         _raw: convo,
+//       }));
+
+//       // sort immediately
+
+//       initial.sort((a, b) => {
+//         if (!a.lastMessageTime) return 1;
+//         if (!b.lastMessageTime) return -1;
+
+//         return (
+//           new Date(b.lastMessageTime) -
+//           new Date(a.lastMessageTime)
+//         );
+//       });
+
+//       // render instantly
+
+//       setConversations(initial);
+
+//       Animated.timing(listOpacity, {
+//         toValue: 1,
+//         duration: 350,
+//         useNativeDriver: true,
+//       }).start();
+
+//       // STEP 2
+//       // BACKGROUND ENRICHMENT
+
+//       initial.forEach(async (item) => {
+
+//         const convo = item._raw;
+
+//         let lastMessage = '';
+//         let unread = 0;
+
+//         try {
+
+//           // ONLY fetch latest single message
+
+//           const lastMsgIndex =
+//             convo.lastMessage?.index;
+
+//           if (lastMsgIndex != null) {
+
+//             const page =
+//               await convo.getMessages(
+//                 1,
+//                 lastMsgIndex,
+//                 'backwards'
+//               );
+
+//             if (page.items.length > 0) {
+
+//               const last =
+//                 page.items[0];
+
+//               if (
+//                 last.attachedMedia?.length
+//               ) {
+
+//                 const media =
+//                   last.attachedMedia[0];
+
+//                 const type =
+//                   media.contentType || '';
+
+//                 if (
+//                   type.startsWith(
+//                     'image/'
+//                   )
+//                 ) {
+//                   lastMessage =
+//                     '📷 Photo';
+
+//                 } else if (
+//                   type.startsWith(
+//                     'video/'
+//                   )
+//                 ) {
+//                   lastMessage =
+//                     '🎥 Video';
+
+//                 } else if (
+//                   type.includes(
+//                     'pdf'
+//                   )
+//                 ) {
+//                   lastMessage =
+//                     '📄 PDF';
+
+//                 } else {
+//                   lastMessage =
+//                     '📎 Attachment';
+//                 }
+
+//               } else {
+
+//                 lastMessage =
+//                   last.body || '';
+//               }
+//             }
+//           }
+
+//           unread =
+//             await convo.getUnreadMessagesCount() || 0;
+
+//         } catch (err) {
+
+//           console.log(
+//             'BACKGROUND FETCH ERROR',
+//             err
+//           );
+//         }
+
+//         // UPDATE ONLY THIS ITEM
+
+//         setConversations(prev =>
+
+//           prev.map(c => {
+
+//             if (
+//               c.sid !== item.sid
+//             ) {
+//               return c;
+//             }
+
+//             return {
+//               ...c,
+//               lastMessage:
+//                 lastMessage ||
+//                 'Tap to start chatting',
+
+//               unread,
+//             };
+//           })
+//         );
+//       });
+
+//     } catch (err) {
+
+//       console.log(
+//         'LOAD CONVOS ERROR:',
+//         err
+//       );
+
+//       setError(
+//         'Could not load conversations'
+//       );
+//     }
+
+//   },
+//   [currentUser, listOpacity]
+// );
+
+
+
   const handleRegister = async () => {
     const me = username.trim();
     if (!me) return setError('Please enter a username');

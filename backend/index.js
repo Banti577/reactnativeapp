@@ -203,27 +203,27 @@ app.post('/incoming-sms', (req, res) => {
 
 
 app.post(
-    '/incoming-phonecall',
-    (req, res) => {
+  '/incoming-phonecall',
+  (req, res) => {
 
-        console.log(
-            'Incoming phone call'
-        );
+    console.log(
+      'Incoming phone call'
+    );
 
-        const twiml =
-            new twilio.twiml.VoiceResponse();
+    const twiml =
+      new twilio.twiml.VoiceResponse();
 
-        const dial =
-            twiml.dial();
+    const dial =
+      twiml.dial();
 
-        dial.client('bunty');
+    dial.client('bunty');
 
-        res.type('text/xml');
+    res.type('text/xml');
 
-        res.send(
-            twiml.toString()
-        );
-    }
+    res.send(
+      twiml.toString()
+    );
+  }
 );
 
 
@@ -279,7 +279,7 @@ app.post('/voice', (req, res) => {
     });
 
 
-console.log('req body is', req.body.To)
+    console.log('req body is', req.body.To)
     dial.number(req.body.To || req.query.To);
 
 
