@@ -2,7 +2,11 @@ import React, { useEffect, useState } from 'react';
 import firebase from '@react-native-firebase/app';
 import messaging, { FirebaseMessagingTypes } from '@react-native-firebase/messaging';
 import notifee, { AndroidImportance } from '@notifee/react-native';
+import { useDispatch } from 'react-redux';
+import type { AppDispatch } from './redux/store';
 import { setupFCMTokenRefresh } from './src/services/notifications/fcmTokenService';
+import { Client } from '@twilio/conversations';
+
 import {
   View,
   Text,
@@ -121,6 +125,7 @@ async function displayNotification(
 }
 
 function InAppNotification() {
+  const dispatch = useDispatch<AppDispatch>();
   const [inAppNotif, setInAppNotif] =
     useState<InAppNotificationState | null>(null);
 
@@ -129,7 +134,7 @@ function InAppNotification() {
 
     requestNotificationPermission();
     createChannel();
-    setupFCMTokenRefresh().then(unsubscribe => {
+    setupFCMTokenRefresh(dispatch).then(unsubscribe => {
       unsubscribeTokenRefresh = unsubscribe;
     });
 
@@ -139,7 +144,7 @@ function InAppNotification() {
       unsubscribeTokenRefresh?.();
       unsubscribeNotificationHandlers();
     };
-  }, []);
+  }, [dispatch]);
 
   async function requestNotificationPermission() {
     if (Platform.OS === 'android' && Platform.Version >= 33) {

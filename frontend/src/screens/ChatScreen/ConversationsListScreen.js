@@ -21,6 +21,7 @@ import {
   getAllConversations,
   getConversation,
 } from '../../features/chat/services/chatService';
+import { useSelector } from 'react-redux';
 
 // ─────────────────────────────────────────────
 // HELPERS
@@ -134,6 +135,8 @@ const ConversationItem = ({ item, onPress }) => {
 // MAIN SCREEN
 
 const ConversationsListScreen = ({ navigation }) => {
+  const fcmToken = useSelector(state => state.fcmtoken.fcmToken);
+
   // ── Registration state ──
   const [username, setUsername] = useState('');
   const [isRegistered, setIsRegistered] = useState(false);
@@ -437,7 +440,7 @@ const ConversationsListScreen = ({ navigation }) => {
     setLoading(true);
 
     try {
-      const client = await initChat(me);
+      const client = await initChat(me, fcmToken);
       setCurrentUser(me);
       setIsRegistered(true);
       await loadConversations(me);   // pass `me` directly — state hasn't committed yet

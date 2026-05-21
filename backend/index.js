@@ -25,6 +25,8 @@ const conversationsServiceSid =
 const twimlAppSid =
   process.env.TWIML_APP_SID;
 
+  const pushCredentialSid = process.env.PUSH_CREDENTIAL_SID
+
 
 
 // TWILIO
@@ -35,10 +37,6 @@ const { AccessToken } = twilio.jwt;
 const { ChatGrant } = AccessToken;
 const { VoiceGrant } = AccessToken;
 
-// ─────────────────────────────────────────────
-// SCOPED SERVICE HELPER
-// Always routes through your custom service SID
-// ─────────────────────────────────────────────
 const svc = () =>
   client.conversations.v1.services(conversationsServiceSid);
 
@@ -67,6 +65,7 @@ app.get('/voice/token', (req, res) => {
     token.addGrant(
       new ChatGrant({
         serviceSid: conversationsServiceSid,
+          pushCredentialSid: pushCredentialSid
       })
     );
 
@@ -135,6 +134,31 @@ app.delete('/reset', async (req, res) => {
   }
 });
 
+
+// CHECK BINDINGS
+app.get('/check-bindings', async (req, res) => {
+  try {
+    const bindings = await client.conversations
+      .v1
+      .services(conversationsServiceSid)
+      .bindings
+      .list({ limit: 20 });
+
+    return res.json({
+      count: bindings.length,
+      bindings: bindings.map(b => ({
+        identity: b.identity,
+        type: b.bindingType,
+        address: b.address,
+        sid: b.sid,
+      }))
+    });
+
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ error: err.message });
+  }
+});
 
 app.post('/send-sms', async (req, res) => {
   try {

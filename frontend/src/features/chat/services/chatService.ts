@@ -1,10 +1,10 @@
 import { Client } from '@twilio/conversations';
 
-const BACKEND_URL = 'http://192.168.4.200:3000';
+const BACKEND_URL = 'http://192.168.4.198:3000';
 
 // Timeout constants — change in one place
-const INIT_TIMEOUT_MS  = 15_000;
-const SYNC_TIMEOUT_MS  = 20_000;
+const INIT_TIMEOUT_MS = 15_000;
+const SYNC_TIMEOUT_MS = 20_000;
 const SYNC_RETRY_DELAY = 1_000;
 const SYNC_MAX_RETRIES = 10;
 
@@ -53,7 +53,10 @@ function waitForEvent(
 }
 
 
-export async function initChat(identity: string): Promise<TwilioClient> {
+export async function initChat(
+    identity: string,
+    fcmToken?: string,
+): Promise<TwilioClient> {
 
     // Cleanup any existing client first
     await shutdownChat();
@@ -78,6 +81,7 @@ export async function initChat(identity: string): Promise<TwilioClient> {
         // ─────────────────────────
         twilioClient = new Client(token);
 
+
         // ─────────────────────────
         // WAIT FOR INITIALIZED
         // ─────────────────────────
@@ -92,6 +96,23 @@ export async function initChat(identity: string): Promise<TwilioClient> {
         ]);
 
         console.log('TWILIO INITIALIZED');
+
+        if (fcmToken) {
+
+            try {
+
+                await twilioClient.setPushRegistrationId(
+                    'fcm',
+                    fcmToken
+                );
+
+                console.log('Push registered');
+
+            } catch (err) {
+
+                console.log('Push registration failed', err);
+            }
+        }
 
         // ─────────────────────────
         // WAIT FOR CONNECTION
@@ -108,7 +129,7 @@ export async function initChat(identity: string): Promise<TwilioClient> {
         console.log('CHAT READY:', identity);
 
         console.log('CHAT READY:', identity);
-        
+
         return twilioClient;
 
     } catch (err) {
@@ -222,7 +243,7 @@ export async function sendFile(
     const formData = new FormData();
 
     formData.append('file', {
-        uri:  file.uri,
+        uri: file.uri,
         name: file.name,
         type: file.type,
     });
@@ -235,10 +256,10 @@ export async function sendFile(
 
         onProgress: onProgress
             ? (bytes: number, total: number) => {
-                  if (total > 0) {
-                      onProgress(Math.round((bytes / total) * 100));
-                  }
-              }
+                if (total > 0) {
+                    onProgress(Math.round((bytes / total) * 100));
+                }
+            }
             : undefined,
     });
 
@@ -256,7 +277,7 @@ export async function deleteMessage(
 ): Promise<void> {
 
     if (!conversation) throw new Error('Conversation missing');
-    if (!message)      throw new Error('Message missing');
+    if (!message) throw new Error('Message missing');
 
     await message.remove();
 
