@@ -1,7 +1,11 @@
 import React from 'react';
 import { ScrollView, StyleSheet, Text } from 'react-native';
 
-const VoiceLogList = ({ logs }) => (
+type VoiceLogListProps = {
+  logs: string[];
+};
+
+const VoiceLogList = ({ logs }: VoiceLogListProps) => (
   <ScrollView style={styles.logs}>
     {logs.map((item, index) => (
       <Text key={`${item}-${index}`} style={styles.log}>

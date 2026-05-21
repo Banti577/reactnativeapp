@@ -6,7 +6,7 @@ import {
   sendMessage,
   sendFile,
   deleteMessage,
-} from '../services/chatService';
+} from '../features/chat/services/chatService';
 
 // ─────────────────────────────────────────────
 // HELPERS

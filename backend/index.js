@@ -22,6 +22,11 @@ const apiSecret =
 const conversationsServiceSid =
   process.env.TWILIO_CONVERSATIONS_SERVICE_SID;
 
+const twimlAppSid =
+  process.env.TWIML_APP_SID;
+
+  const pushCredentialSid = process.env.PUSH_CREDENTIAL_SID
+
 
 
 // TWILIO
@@ -30,16 +35,14 @@ const client = twilio(accountSid, authToken);
 
 const { AccessToken } = twilio.jwt;
 const { ChatGrant } = AccessToken;
+const { VoiceGrant } = AccessToken;
 
-// ─────────────────────────────────────────────
-// SCOPED SERVICE HELPER
-// Always routes through your custom service SID
-// ─────────────────────────────────────────────
 const svc = () =>
   client.conversations.v1.services(conversationsServiceSid);
 
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 
 // TOKEN
@@ -57,9 +60,19 @@ app.get('/voice/token', (req, res) => {
       ttl: 3600,
     });
 
+
+
     token.addGrant(
       new ChatGrant({
         serviceSid: conversationsServiceSid,
+          pushCredentialSid: pushCredentialSid
+      })
+    );
+
+    token.addGrant(
+      new VoiceGrant({
+        outgoingApplicationSid: twimlAppSid,
+        incomingAllow: true,
       })
     );
 
@@ -120,6 +133,192 @@ app.delete('/reset', async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
+
+
+// CHECK BINDINGS
+app.get('/check-bindings', async (req, res) => {
+  try {
+    const bindings = await client.conversations
+      .v1
+      .services(conversationsServiceSid)
+      .bindings
+      .list({ limit: 20 });
+
+    return res.json({
+      count: bindings.length,
+      bindings: bindings.map(b => ({
+        identity: b.identity,
+        type: b.bindingType,
+        address: b.address,
+        sid: b.sid,
+      }))
+    });
+
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/send-sms', async (req, res) => {
+  try {
+
+    const { to, message } = req.body;
+
+
+    if (!to || !message) {
+      return res.status(400).json({
+        success: false,
+        error: 'to and message required',
+      });
+    }
+
+
+    const response = await client.messages.create({
+      body: message,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: to,
+    });
+
+    console.log('SMS SENT:', response.sid);
+
+    return res.json({
+      success: true,
+      sid: response.sid,
+      status: response.status,
+    });
+
+  } catch (err) {
+
+    console.log('TWILIO SMS ERROR');
+    console.log(err);
+
+    return res.status(500).json({
+      success: false,
+      error: err.message,
+    });
+  }
+});
+
+
+//Incoming msg from user to APP WebHook
+
+
+app.post('/incoming-sms', (req, res) => {
+
+  console.log('INCOMING SMS');
+
+  console.log('FROM:', req.body.From);
+
+  console.log('MESSAGE:', req.body.Body);
+
+  // Later:
+  // save in DB
+  // socket emit
+  // push notification
+  // app sync
+
+  res.sendStatus(200);
+});
+
+
+
+//incoming call from phone 
+
+
+app.post(
+  '/incoming-phonecall',
+  (req, res) => {
+
+    console.log(
+      'Incoming phone call'
+    );
+
+    const twiml =
+      new twilio.twiml.VoiceResponse();
+
+    const dial =
+      twiml.dial();
+
+    dial.client('bunty');
+
+    res.type('text/xml');
+
+    res.send(
+      twiml.toString()
+    );
+  }
+);
+
+
+// Create APP to phone call
+
+app.post("/make-call", async (req, res) => {
+  try {
+    console.log('req body is', req.body)
+    const { phoneNumber } = req.body;
+
+
+    const call = await client.calls.create({
+      to: phoneNumber, // user phone number
+      from: process.env.TWILIO_PHONE_NUMBER,
+      twiml: `
+        <Response>
+          <Say voice="alice">
+            Hello. This call is from your React Native application.
+          </Say>
+        </Response>
+      `,
+    });
+
+    console.log('this is call status', call)
+
+    res.json({
+      success: true,
+      callSid: call.sid,
+    });
+  } catch (error) {
+    console.log(error);
+
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+//for TwiMl voice route called by  twilio webhook
+
+
+app.post('/voice', (req, res) => {
+  try {
+    console.log('VOICE WEBHOOK HIT');
+
+    const VoiceResponse = twilio.twiml.VoiceResponse;
+
+    const response = new VoiceResponse();
+
+    const dial = response.dial({
+      callerId: process.env.TWILIO_PHONE_NUMBER,
+    });
+
+
+    console.log('req body is', req.body.To)
+    dial.number(req.body.To || req.query.To);
+
+
+
+    res.type('text/xml');
+
+    return res.send(response.toString());
+
+  } catch (err) {
+    console.log(err);
+
+    return res.status(500).send(err.message);
+  }
+});
+
 
 
 // CREATE / FETCH CONVERSATION
@@ -210,9 +409,10 @@ app.post('/conversation', async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────
-// START SERVER
-// ─────────────────────────────────────────────
+
+
+
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Health: http://0.0.0.0:${PORT}/health`);

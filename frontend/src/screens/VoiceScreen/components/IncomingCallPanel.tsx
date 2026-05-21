@@ -3,7 +3,17 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import VoiceActionButton from './VoiceActionButton';
 
-const IncomingCallPanel = ({ callerName, onAccept, onReject }) => (
+type IncomingCallPanelProps = {
+  callerName: string;
+  onAccept: () => void | Promise<unknown>;
+  onReject: () => void;
+};
+
+const IncomingCallPanel = ({
+  callerName,
+  onAccept,
+  onReject,
+}: IncomingCallPanelProps) => (
   <View style={styles.callBox}>
     <Text style={styles.incoming}>Incoming Call</Text>
 

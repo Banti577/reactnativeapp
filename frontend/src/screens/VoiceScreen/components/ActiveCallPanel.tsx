@@ -3,7 +3,19 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import VoiceActionButton from './VoiceActionButton';
 
-const ActiveCallPanel = ({ isMuted, onHangUp, onToggleMute, status }) => (
+type ActiveCallPanelProps = {
+  isMuted: boolean;
+  onHangUp: () => void | Promise<unknown>;
+  onToggleMute: () => void | Promise<unknown>;
+  status: string;
+};
+
+const ActiveCallPanel = ({
+  isMuted,
+  onHangUp,
+  onToggleMute,
+  status,
+}: ActiveCallPanelProps) => (
   <View style={styles.callBox}>
     <Text style={styles.incoming}>
       {status === 'calling' ? 'Calling...' : 'Connected'}

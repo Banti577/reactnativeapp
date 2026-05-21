@@ -6,25 +6,25 @@ import IncomingCallPanel from './components/IncomingCallPanel';
 import VoiceActionButton from './components/VoiceActionButton';
 import VoiceLogList from './components/VoiceLogList';
 import VoiceTextInput from './components/VoiceTextInput';
-import { useTwilioVoice } from './hooks/useTwilioVoice';
+import { useVoiceCall } from '../../features/voice/hooks/useVoiceCall';
 
 const VoiceScreen = () => {
   const {
     acceptCall,
     callerName,
-    callTo,
-    hangUp,
+    endCall,
     identity,
     isMuted,
     logs,
-    makeCall,
+    call,
+    phoneNumber,
     register,
     rejectCall,
-    setCallTo,
     setIdentity,
+    setPhoneNumber,
     status,
     toggleMute,
-  } = useTwilioVoice();
+  } = useVoiceCall();
 
   return (
     <View style={styles.container}>
@@ -44,15 +44,15 @@ const VoiceScreen = () => {
         </>
       )}
 
-      {status === 'registered' && (
+      {status === 'ready' && (
         <>
           <VoiceTextInput
             placeholder="Call To"
-            value={callTo}
-            onChangeText={setCallTo}
+            value={phoneNumber}
+            onChangeText={setPhoneNumber}
           />
 
-          <VoiceActionButton title="Call" onPress={makeCall} />
+          <VoiceActionButton title="Call" onPress={call} />
         </>
       )}
 
@@ -67,7 +67,7 @@ const VoiceScreen = () => {
       {(status === 'calling' || status === 'connected') && (
         <ActiveCallPanel
           isMuted={isMuted}
-          onHangUp={hangUp}
+          onHangUp={endCall}
           onToggleMute={toggleMute}
           status={status}
         />
