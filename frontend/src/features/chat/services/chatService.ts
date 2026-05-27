@@ -1,6 +1,6 @@
 import { Client } from '@twilio/conversations';
 
-const BACKEND_URL = 'http://192.168.4.198:3000';
+const BACKEND_URL = 'http://192.168.4.199:3000';
 
 // Timeout constants — change in one place
 const INIT_TIMEOUT_MS = 15_000;
