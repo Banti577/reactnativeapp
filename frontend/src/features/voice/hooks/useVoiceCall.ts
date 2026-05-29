@@ -2,18 +2,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 
-import { Call, Voice } from '@twilio/voice-react-native-sdk';
+import { Call } from '@twilio/voice-react-native-sdk';
 
 import { VOICE_STATUS, VoiceStatus } from '../../../constants/voice';
 import { logger } from '../../../utils/logger';
 import type { AppDispatch, RootState } from '../../../../redux/store';
 import {
-  clearIncomingCall,
   clearVoiceError,
   resetVoiceCall,
   setActiveCall,
   setIdentity as setReduxIdentity,
-  setIncomingCall,
   setMuted,
   setPhoneNumber as setReduxPhoneNumber,
   setVoiceError,
@@ -23,9 +21,17 @@ import {
 import {
   makeVoiceCall,
   registerVoice,
-  voice,
 } from '../services/phoneService';
+import {
+  getStoredActiveCall,
+  subscribeToActiveCall,
+  subscribeToIncomingInvite,
+} from '../services/incomingCallStore';
 import { validateOutboundPhoneNumber } from '../domain/voiceValidation';
+import {
+  acceptPendingVoiceInvite,
+  rejectPendingVoiceInvite,
+} from '../services/voiceCallActions';
 
 type VoiceCallHook = {
   acceptCall: () => Promise<Call | null>;
@@ -59,6 +65,7 @@ export const useVoiceCall = (): VoiceCallHook => {
   const voiceState = useSelector((state: RootState) => state.voice);
 
   const [incomingInvite, setIncomingInvite] = useState<any>(null);
+  const [activeCall, setActiveCallState] = useState<Call | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
 
   const callRef = useRef<Call | null>(null);
@@ -161,30 +168,21 @@ export const useVoiceCall = (): VoiceCallHook => {
   }, [attachCallListeners, clearCall, dispatch, log, voiceState.phoneNumber]);
 
   const acceptCall = useCallback(async () => {
-    if (!incomingInvite) {
-      return null;
+    const nextCall = await acceptPendingVoiceInvite(dispatch);
+
+    if (nextCall) {
+      callRef.current = nextCall;
+      setActiveCallState(nextCall);
+      log('Call accepted');
     }
 
-    const nextCall = await incomingInvite.accept();
-
-    callRef.current = nextCall;
-    dispatch(setActiveCall(true));
-    setIncomingInvite(null);
-    dispatch(clearIncomingCall());
-    dispatch(setVoiceStatus(VOICE_STATUS.CONNECTED));
-    log('Call accepted');
-    attachCallListeners(nextCall);
-
     return nextCall;
-  }, [attachCallListeners, dispatch, incomingInvite, log]);
+  }, [dispatch, log]);
 
-  const rejectCall = useCallback(() => {
-    incomingInvite?.reject();
-    setIncomingInvite(null);
-    dispatch(clearIncomingCall());
-    dispatch(setVoiceStatus(VOICE_STATUS.READY));
+  const rejectCall = useCallback(async () => {
+    await rejectPendingVoiceInvite(dispatch);
     log('Call rejected');
-  }, [dispatch, incomingInvite, log]);
+  }, [dispatch, log]);
 
   const endCall = useCallback(async () => {
     await callRef.current?.disconnect();
@@ -204,25 +202,19 @@ export const useVoiceCall = (): VoiceCallHook => {
     log(nextValue ? 'Muted' : 'Unmuted');
   }, [dispatch, log, voiceState.isMuted]);
 
-  useEffect(() => {
-    const handleInvite = (invite: any) => {
-      setIncomingInvite(invite);
-      dispatch(setIncomingCall({ callerName: invite?.from || 'Unknown' }));
-      log('Incoming call from: ' + (invite?.from || 'Unknown'));
-    };
+  useEffect(() => subscribeToIncomingInvite(setIncomingInvite), []);
 
-    voice.on(Voice.Event.CallInvite, handleInvite);
-
-    return () => {
-      if (typeof voice.removeListener === 'function') {
-        voice.removeListener(Voice.Event.CallInvite, handleInvite);
-      }
-    };
-  }, [dispatch, log]);
+  useEffect(
+    () => subscribeToActiveCall(callInstance => {
+      callRef.current = callInstance;
+      setActiveCallState(callInstance);
+    }),
+    [],
+  );
 
   return {
     acceptCall,
-    activeCall: callRef.current,
+    activeCall: activeCall || getStoredActiveCall(),
     call,
     callerName: voiceState.callerName,
     endCall,

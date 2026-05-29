@@ -3,7 +3,6 @@ import { useDispatch, useSelector } from "react-redux";
 
 
 import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import auth from '@react-native-firebase/auth';
 
@@ -11,11 +10,9 @@ import { setUser, clearUser } from '../../redux/slices/authSlice';
 
 import AuthNavigator from "./authNavigator";
 import MainNavigator from "./MainNavigator";
+import { flushPendingNavigation, navigationRef } from './navigationService';
 
 
-
-
-const Stack = createNativeStackNavigator();
 
 export default function AppNavigator() {
 
@@ -32,18 +29,18 @@ export default function AppNavigator() {
 
         const unsubscribe =
             auth().onAuthStateChanged(
-                async user => {
+                async firebaseUser => {
 
-                    if (user) {
+                    if (firebaseUser) {
 
                         const token =
-                            await user.getIdToken();
+                            await firebaseUser.getIdToken();
 
                         dispatch(setUser({
 
-                            uid: user.uid,
-                            email: user.email,
-                            name: user.displayName,
+                            uid: firebaseUser.uid,
+                            email: firebaseUser.email,
+                            name: firebaseUser.displayName,
                             token,
 
                         }));
@@ -56,11 +53,11 @@ export default function AppNavigator() {
 
         return unsubscribe;
 
-    }, []);
+    }, [dispatch]);
 
     return (
 
-        <NavigationContainer>
+        <NavigationContainer ref={navigationRef} onReady={flushPendingNavigation}>
 
             {
                 !user?.isAuthenticated ? (

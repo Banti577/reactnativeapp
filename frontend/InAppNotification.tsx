@@ -1,11 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import firebase from '@react-native-firebase/app';
 import messaging, { FirebaseMessagingTypes } from '@react-native-firebase/messaging';
-import notifee, { AndroidImportance } from '@notifee/react-native';
+import notifee, { AndroidImportance, EventType } from '@notifee/react-native';
 import { useDispatch } from 'react-redux';
 import type { AppDispatch } from './redux/store';
 import { setupFCMTokenRefresh } from './src/services/notifications/fcmTokenService';
-import { Client } from '@twilio/conversations';
+import { navigateToVoiceScreen } from './src/navigation/navigationService';
+import { voice } from './src/features/voice/services/phoneService';
+import { syncPendingVoiceInvites } from './src/features/voice/services/voiceInviteSync';
+import {
+  acceptPendingVoiceInvite,
+  rejectPendingVoiceInvite,
+} from './src/features/voice/services/voiceCallActions';
 
 import {
   View,
@@ -35,6 +41,27 @@ type InAppNotificationState = {
 const getStringValue = (value: unknown, fallback = ''): string =>
   typeof value === 'string' ? value : fallback;
 
+const getStringData = (
+  data: FirebaseMessagingTypes.RemoteMessage['data'],
+): Record<string, string> => {
+  const entries = Object.entries(data || {}).filter(
+    (entry): entry is [string, string] => typeof entry[1] === 'string',
+  );
+
+  return Object.fromEntries(entries);
+};
+
+const isIncomingCallNotification = (
+  remoteMessage: FirebaseMessagingTypes.RemoteMessage,
+) => {
+  const payload = JSON.stringify({
+    data: remoteMessage.data,
+    notification: remoteMessage.notification,
+  }).toLowerCase();
+
+  return payload.includes('call') || payload.includes('voice');
+};
+
 const InAppNotificationBanner = ({
   title,
   body,
@@ -42,6 +69,14 @@ const InAppNotificationBanner = ({
   onHide,
 }: InAppNotificationProps) => {
   const translateY = useRef(new Animated.Value(-150)).current;
+
+  const hideNotification = useCallback(() => {
+    Animated.timing(translateY, {
+      toValue: -150,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => onHide());
+  }, [onHide, translateY]);
 
   useEffect(() => {
     Animated.spring(translateY, {
@@ -55,15 +90,7 @@ const InAppNotificationBanner = ({
     }, 4000);
 
     return () => clearTimeout(timer);
-  }, []);
-
-  const hideNotification = () => {
-    Animated.timing(translateY, {
-      toValue: -150,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => onHide());
-  };
+  }, [hideNotification, translateY]);
 
   return (
     <Animated.View style={[
@@ -104,22 +131,40 @@ async function displayNotification(
 ) {
   const title = remoteMessage.notification?.title
     || getStringValue(remoteMessage.data?.title)
+    || (isIncomingCallNotification(remoteMessage) ? 'Incoming call' : '')
     || 'New Notification';
 
   const body = remoteMessage.notification?.body
     || getStringValue(remoteMessage.data?.body)
+    || getStringValue(remoteMessage.data?.twi_from)
     || '';
 
   await notifee.displayNotification({
     title,
     body,
+    data: {
+      ...(remoteMessage.data || {}),
+      isIncomingCall: isIncomingCallNotification(remoteMessage) ? 'true' : 'false',
+    },
     android: {
       channelId: 'default',
       importance: AndroidImportance.HIGH,
       sound: 'default',
       vibrationPattern: [300, 500],
-      pressAction: { id: 'default' },
+      pressAction: { id: 'default', launchActivity: 'default' },
       smallIcon: 'ic_launcher',
+      actions: isIncomingCallNotification(remoteMessage)
+        ? [
+            {
+              title: 'Pick up',
+              pressAction: { id: 'answer-call', launchActivity: 'default' },
+            },
+            {
+              title: 'Decline',
+              pressAction: { id: 'decline-call', launchActivity: 'default' },
+            },
+          ]
+        : undefined,
     },
   });
 }
@@ -144,6 +189,8 @@ function InAppNotification() {
       unsubscribeTokenRefresh?.();
       unsubscribeNotificationHandlers();
     };
+    // Notification listeners should be registered once for this component mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch]);
 
   async function requestNotificationPermission() {
@@ -174,21 +221,67 @@ function InAppNotification() {
     const unsubscribe = messaging().onMessage(async remoteMessage => {
       console.log('🔔 Foreground notification:', JSON.stringify(remoteMessage));
 
+      let handledByVoice = false;
+
+      try {
+        handledByVoice = await voice.handleFirebaseMessage(
+          getStringData(remoteMessage.data),
+        );
+      } catch (err) {
+        console.log('Twilio voice push handoff failed:', err);
+      }
+
+      const isIncomingCall = isIncomingCallNotification(remoteMessage);
+
+      if (isIncomingCall) {
+        await syncPendingVoiceInvites(dispatch);
+      }
+
       const title =
         remoteMessage.notification?.title ||
         getStringValue(remoteMessage.data?.title) ||
+        (isIncomingCall ? 'Incoming call' : '') ||
         'Notification';
 
       const body =
         remoteMessage.notification?.body ||
         getStringValue(remoteMessage.data?.body) ||
+        getStringValue(remoteMessage.data?.twi_from) ||
         '';
 
       // 1. Show in-app banner
       setInAppNotif({ title, body });
 
       // 2. Show status bar notification
-      await displayNotification(remoteMessage);
+      if (!handledByVoice || isIncomingCall) {
+        await displayNotification(remoteMessage);
+      }
+    });
+
+    const unsubscribeNotifee = notifee.onForegroundEvent(({ type, detail }) => {
+      const actionId = detail.pressAction?.id;
+
+      if (actionId === 'answer-call') {
+        voice.handleFirebaseMessage(getStringData(detail.notification?.data))
+          .catch(err => console.log('Twilio voice push handoff failed:', err))
+          .then(() => acceptPendingVoiceInvite(dispatch))
+          .then(() => navigateToVoiceScreen())
+          .catch(err => console.log('Failed to answer call:', err));
+        return;
+      }
+
+      if (actionId === 'decline-call') {
+        rejectPendingVoiceInvite(dispatch)
+          .catch(err => console.log('Failed to decline call:', err));
+        return;
+      }
+
+      if (
+        type === EventType.PRESS &&
+        detail.notification?.data?.isIncomingCall === 'true'
+      ) {
+        navigateToVoiceScreen();
+      }
     });
 
     // ─────────────────────────────────────
@@ -196,7 +289,9 @@ function InAppNotification() {
     // ─────────────────────────────────────
     messaging().onNotificationOpenedApp(remoteMessage => {
       console.log('Tapped from background:', remoteMessage);
-      // navigation.navigate('Chat')
+      if (isIncomingCallNotification(remoteMessage)) {
+        navigateToVoiceScreen();
+      }
     });
 
     // ─────────────────────────────────────
@@ -205,11 +300,16 @@ function InAppNotification() {
     messaging().getInitialNotification().then(remoteMessage => {
       if (remoteMessage) {
         console.log('Opened from killed state:', remoteMessage);
-        // navigation.navigate('Chat')
+        if (isIncomingCallNotification(remoteMessage)) {
+          navigateToVoiceScreen();
+        }
       }
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      unsubscribeNotifee();
+    };
   }
 
   if (!inAppNotif) {
@@ -222,7 +322,7 @@ function InAppNotification() {
       body={inAppNotif.body}
       onPress={() => {
         console.log('In-app notification tapped');
-        // navigation.navigate('Chat')
+        navigateToVoiceScreen();
       }}
       onHide={() => setInAppNotif(null)}
     />

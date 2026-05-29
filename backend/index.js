@@ -73,6 +73,7 @@ app.get('/voice/token', (req, res) => {
       new VoiceGrant({
         outgoingApplicationSid: twimlAppSid,
         incomingAllow: true,
+         pushCredentialSid: pushCredentialSid
       })
     );
 
@@ -240,7 +241,7 @@ app.post(
     const dial =
       twiml.dial();
 
-    dial.client('bunty');
+    dial.client(process.env.TWILIO_CLIENT_IDENTITY || 'bunty');
 
     res.type('text/xml');
 
@@ -290,36 +291,61 @@ app.post("/make-call", async (req, res) => {
 //for TwiMl voice route called by  twilio webhook
 
 
+// app.post('/voice', (req, res) => {
+//   try {
+//     console.log('VOICE WEBHOOK HIT');
+
+//     const VoiceResponse = twilio.twiml.VoiceResponse;
+
+//     const response = new VoiceResponse();
+
+//     const dial = response.dial({
+//       callerId: process.env.TWILIO_PHONE_NUMBER,
+//     });
+
+
+//     console.log('req body is', req.body.To)
+//     dial.number(req.body.To || req.query.To);
+
+
+
+//     res.type('text/xml');
+
+//     return res.send(response.toString());
+
+//   } catch (err) {
+//     console.log(err);
+
+//     return res.status(500).send(err.message);
+//   }
+// });
+
+
 app.post('/voice', (req, res) => {
   try {
-    console.log('VOICE WEBHOOK HIT');
+    console.log('VOICE WEBHOOK — body:', req.body);
 
-    const VoiceResponse = twilio.twiml.VoiceResponse;
-
-    const response = new VoiceResponse();
-
+    const response = new twilio.twiml.VoiceResponse();
+    const to = (req.body.To || req.query.To || '').trim();
+    const from = (req.body.From || req.query.From || '').trim();
     const dial = response.dial({
       callerId: process.env.TWILIO_PHONE_NUMBER,
     });
 
-
-    console.log('req body is', req.body.To)
-    dial.number(req.body.To || req.query.To);
-
-
+    if (from.startsWith('client:') && to) {
+      dial.number(to);
+    } else {
+      dial.client(process.env.TWILIO_CLIENT_IDENTITY || 'bunty');
+    }
 
     res.type('text/xml');
-
     return res.send(response.toString());
 
   } catch (err) {
     console.log(err);
-
     return res.status(500).send(err.message);
   }
 });
-
-
 
 // CREATE / FETCH CONVERSATION
 
