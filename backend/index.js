@@ -278,6 +278,7 @@ app.post("/make-call", async (req, res) => {
       success: true,
       callSid: call.sid,
     });
+
   } catch (error) {
     console.log(error);
 

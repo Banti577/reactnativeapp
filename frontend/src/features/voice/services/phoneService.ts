@@ -17,6 +17,8 @@ export const registerVoice = async (identity: string): Promise<string> => {
   }
 
   const token = await fetchTwilioToken(identity);
+
+  console.log('this is voice token console', token)
   await voice.register(token);
 
   logger.info(scope, 'registered');
